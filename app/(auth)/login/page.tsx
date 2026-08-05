@@ -1,0 +1,2 @@
+import Link from "next/link"; import { AuthForm } from "@/components/auth/auth-form"; import { AuthShell } from "@/components/auth/auth-shell";
+export default function Page(){return <AuthShell title="Welcome back" subtitle="Log in to manage your projects"><AuthForm mode="login"/><div className="mt-5 flex justify-between text-sm"><Link href="/forgot-password" className="text-brand-600">Forgot password?</Link><Link href="/register">Create account</Link></div></AuthShell>}
