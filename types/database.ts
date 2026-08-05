@@ -730,6 +730,10 @@ export interface Database {
         Args: Record<string, never>;
         Returns: void;
       };
+      seed_categories: {
+        Args: Record<string, never>;
+        Returns: void;
+      };
     };
     Enums: {
       user_role: UserRole;

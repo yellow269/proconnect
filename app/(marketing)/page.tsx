@@ -89,34 +89,43 @@ const iconMap: Record<string, LucideIcon> = {
   download: Download,
   database: Database,
   cpu: Cpu,
+  eye: Search,
+  "fence": Link,
   factory: Factory,
   file: FileText,
   "file-text": FileText,
   film: Film,
+  flame: Zap,
   gamepad: Gamepad2,
   "graduation-cap": GraduationCap,
   globe: Globe,
   hammer: Hammer,
   headphones: Headphones,
   "heart-pulse": HeartPulse,
+  heart: CheckCircle,
   "help-circle": HelpCircle,
   home: Home,
+  "keyboard": Type,
   layout: Layout,
   leaf: Leaf,
   link: Link,
+  lock: Shield,
   mail: Mail,
   mic: Mic,
   monitor: Monitor,
   "more-horizontal": MoreHorizontal,
   music: Music,
+  navigation: Target,
   network: Network,
   package: Package,
   palette: Palette,
+  paintbrush: Brush,
   "pen-tool": PenTool,
   "pie-chart": PieChart,
   printer: Printer,
   radio: Radio,
   ruler: Ruler,
+  scissors: Brush,
   search: Search,
   server: Server,
   settings: Settings,
@@ -125,19 +134,37 @@ const iconMap: Record<string, LucideIcon> = {
   "shopping-cart": ShoppingCart,
   signal: Signal,
   smartphone: Smartphone,
+  sofa: Package,
   sparkles: Zap,
+  sun: Zap,
   table: Table,
   target: Target,
+  thermometer: Zap,
   "trending-up": TrendingUp,
+  "trash-2": MoreHorizontal,
   truck: Truck,
+  trees: Leaf,
   type: Type,
   university: University,
+  "user-check": User,
   user: User,
   "user-plus": UserPlus,
   users: Users,
+  utensils: Package,
   video: Video,
   wifi: Wifi,
+  wine: Package,
   wrench: Wrench,
+  "x-circle": MoreHorizontal,
+  "door-open": Home,
+  bike: Car,
+  square: Package,
+  axe: Hammer,
+  apple: CheckCircle,
+  hand: User,
+  "book-open": FileText,
+  book: FileText,
+  edit: FileText,
 };
 
 function getIcon(name: string | null): LucideIcon {
@@ -147,10 +174,20 @@ function getIcon(name: string | null): LucideIcon {
 
 export default async function HomePage() {
   const supabase = await createClient();
-  const { data: categories } = await supabase
+
+  let { data: categories } = await supabase
     .from("categories")
     .select("id, name, slug, icon")
     .order("name");
+
+  if (!categories || categories.length === 0) {
+    await supabase.rpc("seed_categories");
+    const result = await supabase
+      .from("categories")
+      .select("id, name, slug, icon")
+      .order("name");
+    categories = result.data;
+  }
 
   const displayCategories = categories ?? [];
 

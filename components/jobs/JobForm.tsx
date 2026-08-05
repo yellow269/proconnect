@@ -24,10 +24,20 @@ export default function JobForm({ userId }: { userId: string }) {
 
   useEffect(() => {
     async function loadCategories() {
-      const { data } = await supabase
+      let { data } = await supabase
         .from("categories")
         .select("id, name")
         .order("name");
+
+      if (!data || data.length === 0) {
+        await supabase.rpc("seed_categories");
+        const result = await supabase
+          .from("categories")
+          .select("id, name")
+          .order("name");
+        data = result.data;
+      }
+
       if (data) setCategories(data);
     }
     loadCategories();
