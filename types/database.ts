@@ -1,8 +1,8 @@
 export type UserRole = "customer" | "professional" | "admin";
 export type JobStatus = "draft" | "open" | "quoted" | "assigned" | "in_progress" | "completed" | "cancelled";
 export type QuoteStatus = "pending" | "accepted" | "rejected" | "withdrawn";
-export type SubscriptionPlan = "free" | "pro" | "business";
-export type SubscriptionStatus = "inactive" | "trialing" | "active" | "past_due" | "cancelled";
+export type SubscriptionPlan = "free" | "pro";
+export type SubscriptionStatus = "inactive" | "trialing" | "active" | "past_due" | "cancelled" | "expired";
 export type NotificationType = "job" | "quote" | "review" | "subscription" | "system";
 
 export interface Database {
@@ -500,39 +500,57 @@ export interface Database {
         Row: {
           id: string;
           professional_id: string;
+          user_id: string | null;
           plan: SubscriptionPlan;
+          plan_name: string | null;
+          amount: number | null;
+          currency: string | null;
           status: SubscriptionStatus;
           payfast_token: string | null;
           payfast_subscription_id: string | null;
           current_period_start: string | null;
           current_period_end: string | null;
+          next_billing_date: string | null;
           cancel_at_period_end: boolean;
+          cancelled_at: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           professional_id: string;
+          user_id?: string | null;
           plan?: SubscriptionPlan;
+          plan_name?: string | null;
+          amount?: number | null;
+          currency?: string | null;
           status?: SubscriptionStatus;
           payfast_token?: string | null;
           payfast_subscription_id?: string | null;
           current_period_start?: string | null;
           current_period_end?: string | null;
+          next_billing_date?: string | null;
           cancel_at_period_end?: boolean;
+          cancelled_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           professional_id?: string;
+          user_id?: string | null;
           plan?: SubscriptionPlan;
+          plan_name?: string | null;
+          amount?: number | null;
+          currency?: string | null;
           status?: SubscriptionStatus;
           payfast_token?: string | null;
           payfast_subscription_id?: string | null;
           current_period_start?: string | null;
           current_period_end?: string | null;
+          next_billing_date?: string | null;
           cancel_at_period_end?: boolean;
+          cancelled_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
