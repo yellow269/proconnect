@@ -274,26 +274,25 @@ export async function POST(req: Request) {
     // 9. Return checkout data
     // ==================================================
 
-    return NextResponse.json({
-      url: getPayFastUrl(),
+    const signature = generateSignature(data, true);
 
-      data: {
-        ...data,
-        signature,
-      },
-    });
-  } catch (error) {
-    console.error(
-      "[PayFast] Checkout error:",
-      error
-    );
+console.log("========== FINAL PAYFAST PAYLOAD ==========");
+console.log(
+  JSON.stringify(
+    {
+      ...data,
+      signature,
+    },
+    null,
+    2
+  )
+);
+console.log("===========================================");
 
-    return NextResponse.json(
-      {
-        error:
-          "Unable to create PayFast checkout",
-      },
-      { status: 500 }
-    );
-  }
-}
+return NextResponse.json({
+  url: getPayFastUrl(),
+  data: {
+    ...data,
+    signature,
+  },
+});
