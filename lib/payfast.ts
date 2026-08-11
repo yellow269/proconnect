@@ -7,6 +7,9 @@ const PAYFAST_URL =
   process.env.PAYFAST_URL ??
   "https://sandbox.payfast.co.za/eng/process";
 
+/**
+ * Encode a value using PayFast/PHP urlencode() style.
+ */
 function encodeValue(value: string): string {
   return encodeURIComponent(value.trim())
     .replace(/%20/g, "+")
@@ -18,6 +21,9 @@ function encodeValue(value: string): string {
     .replace(/\)/g, "%29");
 }
 
+/**
+ * PayFast checkout field order.
+ */
 export const CHECKOUT_FIELD_ORDER = [
   "merchant_id",
   "merchant_key",
@@ -221,7 +227,9 @@ export function verifySignature(
     .digest("hex")
     .toLowerCase();
 
-  const received = receivedSignature.trim().toLowerCase();
+  const received = receivedSignature
+    .trim()
+    .toLowerCase();
 
   console.log("[PayFast] ITN signature check:", {
     received,
