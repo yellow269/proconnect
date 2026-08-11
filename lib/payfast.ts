@@ -1,33 +1,37 @@
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { PLANS } from "@/lib/plans";
 import { getPayfastConfig } from "@/lib/env";
 import type { SubscriptionPlan } from "@/types/database";
 
-/**
- * PayFast payment URL.
- *
- * LIVE:
- * https://www.payfast.co.za/eng/process
- *
- * SANDBOX:
- * https://sandbox.payfast.co.za/eng/process
- */
 const PAYFAST_URL =
   process.env.PAYFAST_URL ??
   "https://sandbox.payfast.co.za/eng/process";
 
 /**
+ * PayFast uses PHP's urlencode() behaviour:
+ * - spaces => +
+ * - uppercase percent encoding
+ */
+function encodeValue(value: string): string {
+  return encodeURIComponent(value.trim())
+    .replace(/%20/g, "+")
+    .replace(/~/g, "%7E")
+    .replace(/!/g, "%21")
+    .replace(/\*/g, "%2A")
+    .replace(/'/g, "%27")
+    .replace(/\(/g, "%28")
+    .replace(/\)/g, "%29");
+}
+
+/**
  * PayFast checkout field order.
  *
  * IMPORTANT:
- * PayFast requires the fields to be used in the order
- * specified by their Custom Integration documentation.
- *
- * The passphrase is NOT included here.
- * It is appended separately at the very end of the
- * signature string.
+ * This is NOT alphabetical order.
+ * PayFast checkout signatures use the order
+ * in which the checkout attributes are documented.
  */
-const CHECKOUT_FIELD_ORDER = [
+export const CHECKOUT_FIELD_ORDER = [
   "merchant_id",
   "merchant_key",
   "return_url",
@@ -60,6 +64,7 @@ const CHECKOUT_FIELD_ORDER = [
   "email_confirmation",
   "confirmation_address",
 
+  "currency",
   "payment_method",
 
   "subscription_type",
@@ -74,38 +79,7 @@ const CHECKOUT_FIELD_ORDER = [
 ] as const;
 
 /**
- * PHP urlencode() compatible encoding.
- *
- * PayFast requires:
- * - spaces => +
- * - special characters URL encoded
- * - uppercase hexadecimal encoding
- */
-function encodeValue(value: string): string {
-  return encodeURIComponent(value)
-    .replace(/%20/g, "+")
-    .replace(/~/g, "%7E")
-    .replace(/!/g, "%21")
-    .replace(/\*/g, "%2A")
-    .replace(/'/g, "%27")
-    .replace(/\(/g, "%28")
-    .replace(/\)/g, "%29");
-}
-
-/**
- * Generate PayFast MD5 security signature.
- *
- * PayFast's required process:
- *
- * 1. Take all non-empty checkout fields.
- * 2. Keep them in PayFast's documented order.
- * 3. URL encode the values.
- * 4. Join them with "&".
- * 5. Append:
- *
- *      &passphrase=YOUR_PASSPHRASE
- *
- * 6. MD5 the complete string.
+ * Generate PayFast checkout signature.
  */
 export function generateSignature(
   data: Record<string, string>,
@@ -118,81 +92,43 @@ export function generateSignature(
   for (const key of CHECKOUT_FIELD_ORDER) {
     const value = data[key];
 
-    if (
-      value !== undefined &&
-      value !== null &&
-      value !== ""
-    ) {
-      parts.push(
-        `${key}=${encodeValue(String(value).trim())}`
-      );
+    if (value !== undefined && value !== null && value !== "") {
+      parts.push(`${key}=${encodeValue(value)}`);
     }
   }
 
-  let signatureString = parts.join("&");
+  let parameterString = parts.join("&");
 
-  /**
-   * IMPORTANT:
-   * The passphrase MUST be the final parameter.
-   */
-  if (config.passphrase && config.passphrase.trim() !== "") {
-    signatureString +=
-      `&passphrase=${encodeValue(config.passphrase.trim())}`;
+  // PayFast requires the passphrase AFTER the checkout fields.
+  if (config.passphrase?.trim()) {
+    parameterString += `&passphrase=${encodeValue(
+      config.passphrase
+    )}`;
   }
 
   if (debug) {
-    console.log(
-      "========== PAYFAST SIGNATURE DEBUG =========="
-    );
+    console.log("========== PAYFAST SIGNATURE DEBUG ==========");
+    console.log("Parameter string:");
+    console.log(parameterString);
+    console.log("");
 
     console.log(
-      "Signature fields:",
-      parts.map((part) => {
-        // Don't expose secrets in logs.
-        if (
-          part.startsWith("merchant_key=") ||
-          part.startsWith("passphrase=")
-        ) {
-          return "[REDACTED]";
-        }
-
-        return part;
-      })
+      "MD5:",
+      crypto.createHash("md5").update(parameterString).digest("hex")
     );
 
-    console.log(
-      "Passphrase included:",
-      Boolean(config.passphrase)
-    );
-
-    console.log(
-      "Signature string length:",
-      signatureString.length
-    );
-
-    console.log(
-      "Generated signature:",
-      crypto
-        .createHash("md5")
-        .update(signatureString)
-        .digest("hex")
-    );
-
-    console.log(
-      "=============================================="
-    );
+    console.log("============================================");
   }
 
   return crypto
     .createHash("md5")
-    .update(signatureString)
-    .digest("hex");
+    .update(parameterString)
+    .digest("hex")
+    .toLowerCase();
 }
 
 /**
- * Build the parameters that will be submitted to PayFast.
- *
- * This is for a recurring subscription.
+ * Build the data that will actually be sent to PayFast.
  */
 export function buildCheckoutParams(
   subscriptionId: string,
@@ -203,173 +139,46 @@ export function buildCheckoutParams(
 ): Record<string, string> {
   const config = getPayfastConfig();
 
-  /**
-   * Start billing tomorrow.
-   */
   const tomorrow = new Date();
-
-  tomorrow.setDate(
-    tomorrow.getDate() + 1
-  );
+  tomorrow.setDate(tomorrow.getDate() + 1);
 
   const billingDate =
     `${tomorrow.getFullYear()}-` +
     `${String(tomorrow.getMonth() + 1).padStart(2, "0")}-` +
     `${String(tomorrow.getDate()).padStart(2, "0")}`;
 
-  /**
-   * PayFast m_payment_id must be unique.
-   */
-  const paymentId =
-    subscriptionId.replace(/-/g, "");
+  const paymentId = subscriptionId.replace(/-/g, "");
 
-  const planConfig = PLANS[plan];
+  const amount = Number(PLANS[plan].amount).toFixed(2);
 
-  /**
-   * Build the actual PayFast checkout fields.
-   *
-   * IMPORTANT:
-   * Do not add PAYFAST_PASSPHRASE here.
-   *
-   * It is only used when generating the signature.
-   */
-  const raw: Record<string, string> = {
-    merchant_id: config.merchantId,
-    merchant_key: config.merchantKey,
+  return {
+    merchant_id: config.merchantId.trim(),
+    merchant_key: config.merchantKey.trim(),
 
-    return_url: config.returnUrl,
-    cancel_url: config.cancelUrl,
-    notify_url: config.notifyUrl,
+    return_url: config.returnUrl.trim(),
+    cancel_url: config.cancelUrl.trim(),
+    notify_url: config.notifyUrl.trim(),
 
-    name_first: firstName,
-    name_last: lastName,
-    email_address: email,
+    name_first: firstName.trim(),
+    name_last: lastName.trim(),
+    email_address: email.trim(),
 
     m_payment_id: paymentId,
 
-    /**
-     * PayFast amount must be a decimal value.
-     * Example: "150.00"
-     */
-    amount: Number(planConfig.amount).toFixed(2),
+    amount,
 
-    item_name: planConfig.name,
-    item_description: planConfig.description,
+    item_name: PLANS[plan].name.trim(),
+    item_description: PLANS[plan].description.trim(),
 
-    /**
-     * Recurring subscription.
-     *
-     * 1 = subscription
-     * 3 = monthly
-     * 0 = indefinite
-     */
+    // Recurring subscription
     subscription_type: "1",
-
     billing_date: billingDate,
-
-    recurring_amount:
-      Number(planConfig.amount).toFixed(2),
-
+    recurring_amount: amount,
     frequency: "3",
-
     cycles: "0",
   };
-
-  /**
-   * Return the fields in PayFast's required order.
-   */
-  const ordered: Record<string, string> = {};
-
-  for (const key of CHECKOUT_FIELD_ORDER) {
-    if (
-      raw[key] !== undefined &&
-      raw[key] !== null &&
-      raw[key] !== ""
-    ) {
-      ordered[key] = raw[key];
-    }
-  }
-
-  return ordered;
 }
 
-/**
- * Verify a PayFast ITN signature.
- *
- * IMPORTANT:
- * For ITN verification, PayFast says the signature
- * must be generated from ALL fields posted by PayFast,
- * excluding the signature itself.
- *
- * We therefore preserve the incoming object order rather
- * than filtering it through CHECKOUT_FIELD_ORDER.
- */
-export function verifySignature(
-  body: Record<string, string>
-): boolean {
-  const config = getPayfastConfig();
-
-  const receivedSignature = body.signature;
-
-  if (!receivedSignature) {
-    console.error(
-      "[PayFast ITN] Missing signature"
-    );
-
-    return false;
-  }
-
-  const parts: string[] = [];
-
-  for (const [key, value] of Object.entries(body)) {
-    /**
-     * Do not include the signature itself.
-     */
-    if (key === "signature") {
-      continue;
-    }
-
-    if (
-      value !== undefined &&
-      value !== null &&
-      value !== ""
-    ) {
-      parts.push(
-        `${key}=${encodeValue(String(value).trim())}`
-      );
-    }
-  }
-
-  let signatureString = parts.join("&");
-
-  /**
-   * Passphrase must be appended at the end.
-   */
-  if (config.passphrase && config.passphrase.trim() !== "") {
-    signatureString +=
-      `&passphrase=${encodeValue(config.passphrase.trim())}`;
-  }
-
-  const expectedSignature = crypto
-    .createHash("md5")
-    .update(signatureString)
-    .digest("hex");
-
-  const valid =
-    receivedSignature.toLowerCase() ===
-    expectedSignature.toLowerCase();
-
-  console.log(
-    "[PayFast ITN] Signature valid:",
-    valid
-  );
-
-  return valid;
-}
-
-/**
- * Get the configured PayFast URL.
- */
 export function getPayFastUrl(): string {
   return PAYFAST_URL;
 }
