@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
+
 import {
   buildCheckoutParams,
   generateSignature,
@@ -14,9 +15,9 @@ import type { SubscriptionPlan } from "@/types/database";
 
 export async function POST(req: Request) {
   try {
-    // --------------------------------------------------
+    // ==================================================
     // 1. Supabase
-    // --------------------------------------------------
+    // ==================================================
 
     const supabase = await createClient();
 
@@ -31,9 +32,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // --------------------------------------------------
+    // ==================================================
     // 2. Read plan
-    // --------------------------------------------------
+    // ==================================================
 
     const body = await req.json();
     const plan = body?.plan;
@@ -53,23 +54,25 @@ export async function POST(req: Request) {
 
     const planConfig = PLANS[planKey];
 
-    // --------------------------------------------------
+    // ==================================================
     // 3. Check existing subscription
-    // --------------------------------------------------
+    // ==================================================
 
-    const { data: existing, error: existingError } =
-      await supabase
-        .from("subscriptions")
-        .select("id, plan, status")
-        .or(
-          `user_id.eq.${user.id},professional_id.eq.${user.id}`
-        )
-        .in("status", [
-          "active",
-          "inactive",
-          "trialing",
-        ])
-        .maybeSingle();
+    const {
+      data: existing,
+      error: existingError,
+    } = await supabase
+      .from("subscriptions")
+      .select("id, plan, status")
+      .or(
+        `user_id.eq.${user.id},professional_id.eq.${user.id}`
+      )
+      .in("status", [
+        "active",
+        "inactive",
+        "trialing",
+      ])
+      .maybeSingle();
 
     if (existingError) {
       console.error(
@@ -95,29 +98,31 @@ export async function POST(req: Request) {
       );
     }
 
-    // --------------------------------------------------
+    // ==================================================
     // 4. Create/update subscription
-    // --------------------------------------------------
+    // ==================================================
 
     const subscriptionId =
       existing?.id ?? crypto.randomUUID();
 
     if (!existing) {
-      const { error: insertError } = await supabase
-        .from("subscriptions")
-        .insert({
-          id: subscriptionId,
-          user_id: user.id,
-          professional_id: user.id,
+      const { error: insertError } =
+        await supabase
+          .from("subscriptions")
+          .insert({
+            id: subscriptionId,
 
-          plan: planKey,
-          plan_name: planConfig.name,
+            user_id: user.id,
+            professional_id: user.id,
 
-          amount: Number(planConfig.amount),
-          currency: "ZAR",
+            plan: planKey,
+            plan_name: planConfig.name,
 
-          status: "inactive",
-        });
+            amount: Number(planConfig.amount),
+            currency: "ZAR",
+
+            status: "inactive",
+          });
 
       if (insertError) {
         console.error(
@@ -164,9 +169,9 @@ export async function POST(req: Request) {
       }
     }
 
-    // --------------------------------------------------
+    // ==================================================
     // 5. Customer information
-    // --------------------------------------------------
+    // ==================================================
 
     const fullName =
       user.user_metadata?.full_name ??
@@ -187,9 +192,9 @@ export async function POST(req: Request) {
     const email =
       user.email ?? "";
 
-    // --------------------------------------------------
-    // 6. Build PayFast checkout data
-    // --------------------------------------------------
+    // ==================================================
+    // 6. Build PayFast data
+    // ==================================================
 
     const data = buildCheckoutParams(
       subscriptionId,
@@ -199,16 +204,16 @@ export async function POST(req: Request) {
       lastName
     );
 
-    // --------------------------------------------------
-    // 7. Generate PayFast signature
-    // --------------------------------------------------
+    // ==================================================
+    // 7. Generate signature
+    // ==================================================
 
     const signature =
       generateSignature(data, true);
 
-    // --------------------------------------------------
-    // 8. Debug configuration
-    // --------------------------------------------------
+    // ==================================================
+    // 8. Debug
+    // ==================================================
 
     const config = getPayfastConfig();
 
@@ -242,43 +247,13 @@ export async function POST(req: Request) {
     );
 
     console.log(
-      "Return URL:",
-      config.returnUrl
-    );
-
-    console.log(
-      "Cancel URL:",
-      config.cancelUrl
-    );
-
-    console.log(
-      "Notify URL:",
-      config.notifyUrl
-    );
-
-    console.log(
       "Amount:",
       data.amount
     );
 
     console.log(
-      "Subscription type:",
-      data.subscription_type
-    );
-
-    console.log(
-      "Billing date:",
-      data.billing_date
-    );
-
-    console.log(
-      "Frequency:",
-      data.frequency
-    );
-
-    console.log(
-      "Cycles:",
-      data.cycles
+      "Payment ID:",
+      data.m_payment_id
     );
 
     console.log(
@@ -287,12 +262,17 @@ export async function POST(req: Request) {
     );
 
     console.log(
+      "PAYFAST DATA:",
+      data
+    );
+
+    console.log(
       "======================================"
     );
 
-    // --------------------------------------------------
-    // 9. Return data to frontend
-    // --------------------------------------------------
+    // ==================================================
+    // 9. Return checkout data
+    // ==================================================
 
     return NextResponse.json({
       url: getPayFastUrl(),
@@ -310,7 +290,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json(
       {
-        error: "Unable to create PayFast checkout",
+        error:
+          "Unable to create PayFast checkout",
       },
       { status: 500 }
     );
