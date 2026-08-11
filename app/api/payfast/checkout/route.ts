@@ -1,163 +1,318 @@
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
+
 import { createClient } from "@/lib/supabase/server";
-import { buildCheckoutParams, generateSignature, getPayFastUrl } from "@/lib/payfast";
+import {
+  buildCheckoutParams,
+  generateSignature,
+  getPayFastUrl,
+} from "@/lib/payfast";
+
 import { getPayfastConfig } from "@/lib/env";
 import { PLANS } from "@/lib/plans";
 import type { SubscriptionPlan } from "@/types/database";
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    // --------------------------------------------------
+    // 1. Supabase
+    // --------------------------------------------------
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+    const supabase = await createClient();
 
-  const { plan } = await req.json();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!plan || !PLANS[plan as Exclude<SubscriptionPlan, "free">]) {
-    return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
-  }
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
-  const planKey = plan as Exclude<SubscriptionPlan, "free">;
+    // --------------------------------------------------
+    // 2. Read plan
+    // --------------------------------------------------
 
-  // Check for existing active subscription
-  const { data: existing } = await supabase
-    .from("subscriptions")
-    .select("id, plan, status")
-    .or(`user_id.eq.${user.id},professional_id.eq.${user.id}`)
-    .in("status", ["active", "inactive", "trialing"])
-    .single();
+    const body = await req.json();
+    const plan = body?.plan;
 
-  if (existing && existing.status === "active") {
-    return NextResponse.json({ error: "You already have an active subscription" }, { status: 400 });
-  }
+    if (
+      !plan ||
+      !PLANS[plan as Exclude<SubscriptionPlan, "free">]
+    ) {
+      return NextResponse.json(
+        { error: "Invalid plan" },
+        { status: 400 }
+      );
+    }
 
-  const subscriptionId = existing?.id ?? crypto.randomUUID();
-  const planConfig = PLANS[planKey];
+    const planKey =
+      plan as Exclude<SubscriptionPlan, "free">;
 
-  if (!existing) {
-    const { error: insertError } = await supabase.from("subscriptions").insert({
-      id: subscriptionId,
-      user_id: user.id,
-      professional_id: user.id,
-      plan: planKey,
-      plan_name: planConfig.name,
-      amount: parseFloat(planConfig.amount),
-      currency: "ZAR",
-      status: "inactive",
+    const planConfig = PLANS[planKey];
+
+    // --------------------------------------------------
+    // 3. Check existing subscription
+    // --------------------------------------------------
+
+    const { data: existing, error: existingError } =
+      await supabase
+        .from("subscriptions")
+        .select("id, plan, status")
+        .or(
+          `user_id.eq.${user.id},professional_id.eq.${user.id}`
+        )
+        .in("status", [
+          "active",
+          "inactive",
+          "trialing",
+        ])
+        .maybeSingle();
+
+    if (existingError) {
+      console.error(
+        "[PayFast] Existing subscription error:",
+        existingError.message
+      );
+
+      return NextResponse.json(
+        {
+          error: "Unable to check subscription",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (existing?.status === "active") {
+      return NextResponse.json(
+        {
+          error:
+            "You already have an active subscription",
+        },
+        { status: 400 }
+      );
+    }
+
+    // --------------------------------------------------
+    // 4. Create/update subscription
+    // --------------------------------------------------
+
+    const subscriptionId =
+      existing?.id ?? crypto.randomUUID();
+
+    if (!existing) {
+      const { error: insertError } = await supabase
+        .from("subscriptions")
+        .insert({
+          id: subscriptionId,
+          user_id: user.id,
+          professional_id: user.id,
+
+          plan: planKey,
+          plan_name: planConfig.name,
+
+          amount: Number(planConfig.amount),
+          currency: "ZAR",
+
+          status: "inactive",
+        });
+
+      if (insertError) {
+        console.error(
+          "[PayFast] Insert error:",
+          insertError.message
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "Failed to create subscription",
+          },
+          { status: 500 }
+        );
+      }
+    } else {
+      const { error: updateError } =
+        await supabase
+          .from("subscriptions")
+          .update({
+            plan: planKey,
+            plan_name: planConfig.name,
+
+            amount: Number(planConfig.amount),
+            currency: "ZAR",
+
+            status: "inactive",
+          })
+          .eq("id", subscriptionId);
+
+      if (updateError) {
+        console.error(
+          "[PayFast] Update error:",
+          updateError.message
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "Failed to update subscription",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    // --------------------------------------------------
+    // 5. Customer information
+    // --------------------------------------------------
+
+    const fullName =
+      user.user_metadata?.full_name ??
+      user.user_metadata?.name ??
+      "";
+
+    const nameParts = fullName
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    const firstName =
+      nameParts[0] ?? "User";
+
+    const lastName =
+      nameParts.slice(1).join(" ") || "";
+
+    const email =
+      user.email ?? "";
+
+    // --------------------------------------------------
+    // 6. Build PayFast checkout data
+    // --------------------------------------------------
+
+    const data = buildCheckoutParams(
+      subscriptionId,
+      planKey,
+      email,
+      firstName,
+      lastName
+    );
+
+    // --------------------------------------------------
+    // 7. Generate PayFast signature
+    // --------------------------------------------------
+
+    const signature =
+      generateSignature(data, true);
+
+    // --------------------------------------------------
+    // 8. Debug configuration
+    // --------------------------------------------------
+
+    const config = getPayfastConfig();
+
+    console.log(
+      "========== PAYFAST CHECKOUT =========="
+    );
+
+    console.log(
+      "PayFast URL:",
+      getPayFastUrl()
+    );
+
+    console.log(
+      "Merchant ID:",
+      config.merchantId
+    );
+
+    console.log(
+      "Merchant Key present:",
+      Boolean(config.merchantKey)
+    );
+
+    console.log(
+      "Passphrase present:",
+      Boolean(config.passphrase)
+    );
+
+    console.log(
+      "Passphrase length:",
+      config.passphrase?.length ?? 0
+    );
+
+    console.log(
+      "Return URL:",
+      config.returnUrl
+    );
+
+    console.log(
+      "Cancel URL:",
+      config.cancelUrl
+    );
+
+    console.log(
+      "Notify URL:",
+      config.notifyUrl
+    );
+
+    console.log(
+      "Amount:",
+      data.amount
+    );
+
+    console.log(
+      "Subscription type:",
+      data.subscription_type
+    );
+
+    console.log(
+      "Billing date:",
+      data.billing_date
+    );
+
+    console.log(
+      "Frequency:",
+      data.frequency
+    );
+
+    console.log(
+      "Cycles:",
+      data.cycles
+    );
+
+    console.log(
+      "Signature:",
+      signature
+    );
+
+    console.log(
+      "======================================"
+    );
+
+    // --------------------------------------------------
+    // 9. Return data to frontend
+    // --------------------------------------------------
+
+    return NextResponse.json({
+      url: getPayFastUrl(),
+
+      data: {
+        ...data,
+        signature,
+      },
     });
+  } catch (error) {
+    console.error(
+      "[PayFast] Checkout error:",
+      error
+    );
 
-    if (insertError) {
-      console.error("[Checkout] Insert error:", insertError.message);
-      return NextResponse.json({ error: "Failed to create subscription" }, { status: 500 });
-    }
-  } else if (existing.plan !== planKey || existing.status !== "inactive") {
-    const { error: updateError } = await supabase
-      .from("subscriptions")
-      .update({
-        plan: planKey,
-        plan_name: planConfig.name,
-        amount: parseFloat(planConfig.amount),
-        currency: "ZAR",
-        status: "inactive",
-      })
-      .eq("id", subscriptionId);
-
-    if (updateError) {
-      console.error("[Checkout] Update error:", updateError.message);
-      return NextResponse.json({ error: "Failed to update subscription" }, { status: 500 });
-    }
+    return NextResponse.json(
+      {
+        error: "Unable to create PayFast checkout",
+      },
+      { status: 500 }
+    );
   }
-
-  const firstName = user.user_metadata?.full_name?.split(" ")[0] ?? "User";
-  const lastName = user.user_metadata?.full_name?.split(" ").slice(1).join(" ") ?? "";
-
-  const data = buildCheckoutParams(subscriptionId, planKey, user.email ?? "", firstName, lastName);
-  const signature = generateSignature(data, true);
-
-  // Comprehensive debug logging
-  const config = getPayfastConfig();
-  console.log("");
-  console.log("╔══════════════════════════════════════════════════╗");
-  console.log("║          PAYFAST CHECKOUT - FULL DEBUG          ║");
-  console.log("╚══════════════════════════════════════════════════╝");
-  console.log("");
-
-  // 1. Environment config
-  console.log("--- ENVIRONMENT CONFIG ---");
-  console.log("PAYFAST_MERCHANT_ID:", JSON.stringify(config.merchantId));
-  console.log("PAYFAST_MERCHANT_KEY:", JSON.stringify(config.merchantKey));
-  console.log("PAYFAST_PASSPHRASE:", JSON.stringify(config.passphrase));
-  console.log("PASSPHRASE LENGTH:", config.passphrase.length);
-  console.log("PASSPHRASE HEX:", Buffer.from(config.passphrase).toString("hex"));
-  console.log("PAYFAST_RETURN_URL:", config.returnUrl);
-  console.log("PAYFAST_CANCEL_URL:", config.cancelUrl);
-  console.log("PAYFAST_NOTIFY_URL:", config.notifyUrl);
-  console.log("");
-
-  // 2. Form data fields
-  console.log("--- FORM DATA (exact POST to PayFast) ---");
-  for (const [key, value] of Object.entries(data)) {
-    console.log(`  ${key} = ${JSON.stringify(value)}`);
-  }
-  console.log("");
-  console.log("  signature = " + JSON.stringify(signature));
-  console.log("");
-
-  // 3. Signature string reconstruction
-  console.log("--- SIGNATURE STRING RECONSTRUCTION ---");
-  const config2 = getPayfastConfig();
-  const attrMap: Record<string, string> = {};
-  for (const key of Object.keys(data)) {
-    attrMap[key] = data[key];
-  }
-  if (config2.passphrase && config2.passphrase !== "") {
-    attrMap["passphrase"] = config2.passphrase;
-  }
-
-  const CHECKOUT_FIELD_ORDER = [
-    "merchant_id","merchant_key","return_url","cancel_url","notify_url","notify_method",
-    "name_first","name_last","email_address","cell_number","m_payment_id","amount",
-    "item_name","item_description","custom_int1","custom_int2","custom_int3","custom_int4",
-    "custom_int5","custom_str1","custom_str2","custom_str3","custom_str4","custom_str5",
-    "email_confirmation","confirmation_address","currency","payment_method",
-    "subscription_type","passphrase","billing_date","recurring_amount","frequency","cycles",
-    "subscription_notify_email","subscription_notify_webhook","subscription_notify_buyer",
-  ];
-
-  console.log("Field order used for signature:");
-  const parts: string[] = [];
-  for (const key of CHECKOUT_FIELD_ORDER) {
-    const val = attrMap[key];
-    if (val !== "" && val !== undefined && val !== null) {
-      const encoded = encodeURIComponent(val.trim()).replace(/%20/g, "+").replace(/~/g, "%7E").replace(/!/g, "%21").replace(/\*/g, "%2A").replace(/'/g, "%27").replace(/\(/g, "%28").replace(/\)/g, "%29");
-      parts.push(`${key}=${encoded}`);
-      console.log(`  ✓ ${key} = ${JSON.stringify(val)}  →  ${key}=${encoded}`);
-    }
-  }
-  const fullString = parts.join("&");
-  console.log("");
-  console.log("FULL STRING (MD5 input):");
-  console.log(fullString);
-  console.log("");
-  console.log("GENERATED MD5:", crypto.createHash("md5").update(fullString).digest("hex"));
-  console.log("SUBMITTED SIG:", signature);
-  console.log("MATCH:", crypto.createHash("md5").update(fullString).digest("hex") === signature);
-  console.log("");
-
-  // 4. Final form
-  const formFields = { ...data, signature };
-  console.log("--- FINAL FORM FIELDS (POST body) ---");
-  console.log(JSON.stringify(formFields, null, 2));
-  console.log("╚══════════════════════════════════════════════════╝");
-  console.log("");
-
-  return NextResponse.json({
-    url: getPayFastUrl(),
-    data: formFields,
-  });
 }
