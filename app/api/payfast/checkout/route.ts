@@ -2,21 +2,19 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
-
 import {
   buildCheckoutParams,
   generateSignature,
   getPayFastUrl,
 } from "@/lib/payfast";
 
-import { getPayfastConfig } from "@/lib/env";
 import { PLANS } from "@/lib/plans";
 import type { SubscriptionPlan } from "@/types/database";
 
 export async function POST(req: Request) {
   try {
     // ==================================================
-    // 1. Supabase
+    // 1. Get authenticated user
     // ==================================================
 
     const supabase = await createClient();
@@ -99,7 +97,7 @@ export async function POST(req: Request) {
     }
 
     // ==================================================
-    // 4. Create/update subscription
+    // 4. Create or update subscription
     // ==================================================
 
     const subscriptionId =
@@ -111,16 +109,12 @@ export async function POST(req: Request) {
           .from("subscriptions")
           .insert({
             id: subscriptionId,
-
             user_id: user.id,
             professional_id: user.id,
-
             plan: planKey,
             plan_name: planConfig.name,
-
             amount: Number(planConfig.amount),
             currency: "ZAR",
-
             status: "inactive",
           });
 
@@ -145,10 +139,8 @@ export async function POST(req: Request) {
           .update({
             plan: planKey,
             plan_name: planConfig.name,
-
             amount: Number(planConfig.amount),
             currency: "ZAR",
-
             status: "inactive",
           })
           .eq("id", subscriptionId);
@@ -189,8 +181,7 @@ export async function POST(req: Request) {
     const lastName =
       nameParts.slice(1).join(" ") || "";
 
-    const email =
-      user.email ?? "";
+    const email = user.email ?? "";
 
     // ==================================================
     // 6. Build PayFast data
@@ -205,94 +196,58 @@ export async function POST(req: Request) {
     );
 
     // ==================================================
-    // 7. Generate signature
+    // 7. Generate PayFast signature
     // ==================================================
 
     const signature =
       generateSignature(data, true);
 
     // ==================================================
-    // 8. Debug
+    // 8. FINAL PAYFAST PAYLOAD DEBUG
     // ==================================================
 
-    const config = getPayfastConfig();
-
     console.log(
-      "========== PAYFAST CHECKOUT =========="
+      "========== FINAL PAYFAST PAYLOAD =========="
     );
 
     console.log(
-      "PayFast URL:",
-      getPayFastUrl()
+      JSON.stringify(
+        {
+          ...data,
+          signature,
+        },
+        null,
+        2
+      )
     );
 
     console.log(
-      "Merchant ID:",
-      config.merchantId
-    );
-
-    console.log(
-      "Merchant Key present:",
-      Boolean(config.merchantKey)
-    );
-
-    console.log(
-      "Passphrase present:",
-      Boolean(config.passphrase)
-    );
-
-    console.log(
-      "Passphrase length:",
-      config.passphrase?.length ?? 0
-    );
-
-    console.log(
-      "Amount:",
-      data.amount
-    );
-
-    console.log(
-      "Payment ID:",
-      data.m_payment_id
-    );
-
-    console.log(
-      "Signature:",
-      signature
-    );
-
-    console.log(
-      "PAYFAST DATA:",
-      data
-    );
-
-    console.log(
-      "======================================"
+      "==========================================="
     );
 
     // ==================================================
-    // 9. Return checkout data
+    // 9. Return PayFast checkout data
     // ==================================================
 
-    const signature = generateSignature(data, true);
+    return NextResponse.json({
+      url: getPayFastUrl(),
+      data: {
+        ...data,
+        signature,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "[PayFast] Checkout error:",
+      error
+    );
 
-console.log("========== FINAL PAYFAST PAYLOAD ==========");
-console.log(
-  JSON.stringify(
-    {
-      ...data,
-      signature,
-    },
-    null,
-    2
-  )
-);
-console.log("===========================================");
-
-return NextResponse.json({
-  url: getPayFastUrl(),
-  data: {
-    ...data,
-    signature,
-  },
-});
+    return NextResponse.json(
+      {
+        error:
+          "Unable to create PayFast checkout",
+      },
+      { status: 500 }
+    );
+  }
+}
