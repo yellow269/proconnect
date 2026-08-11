@@ -178,6 +178,13 @@ export function getPayFastUrl(): string {
 }
 
 /**
+ * Get PayFast checkout URL.
+ */
+export function getPayFastUrl(): string {
+  return PAYFAST_URL;
+}
+
+/**
  * Verify PayFast ITN signature.
  */
 export function verifySignature(
@@ -188,24 +195,15 @@ export function verifySignature(
   const receivedSignature = body.signature;
 
   if (!receivedSignature) {
-    console.error("[PayFast] No signature received");
     return false;
   }
 
   const parts: string[] = [];
 
-  for (const [key, rawValue] of Object.entries(body)) {
-    if (key === "signature") {
-      continue;
-    }
+  for (const key of CHECKOUT_FIELD_ORDER) {
+    const value = body[key];
 
-    if (rawValue === undefined || rawValue === null) {
-      continue;
-    }
-
-    const value = String(rawValue).trim();
-
-    if (value === "") {
+    if (value === undefined || value === null || value === "") {
       continue;
     }
 
@@ -217,8 +215,7 @@ export function verifySignature(
   const passphrase = config.passphrase?.trim();
 
   if (passphrase) {
-    parameterString +=
-      `${parameterString ? "&" : ""}passphrase=${encodeValue(passphrase)}`;
+    parameterString += `&passphrase=${encodeValue(passphrase)}`;
   }
 
   const expectedSignature = crypto
@@ -227,15 +224,8 @@ export function verifySignature(
     .digest("hex")
     .toLowerCase();
 
-  const received = receivedSignature
-    .trim()
-    .toLowerCase();
-
-  console.log("[PayFast] ITN signature check:", {
-    received,
-    expected: expectedSignature,
-    match: received === expectedSignature,
-  });
-
-  return received === expectedSignature;
+  return (
+    receivedSignature.trim().toLowerCase() ===
+    expectedSignature
+  );
 }
