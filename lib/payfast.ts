@@ -8,9 +8,15 @@ const PAYFAST_URL =
   "https://sandbox.payfast.co.za/eng/process";
 
 /**
- * PayFast uses PHP's urlencode() behaviour:
+ * PayFast uses PHP urlencode() behaviour:
+ *
  * - spaces => +
- * - uppercase percent encoding
+ * - ~ => %7E
+ * - ! => %21
+ * - * => %2A
+ * - ' => %27
+ * - ( => %28
+ * - ) => %29
  */
 function encodeValue(value: string): string {
   return encodeURIComponent(value.trim())
@@ -26,10 +32,8 @@ function encodeValue(value: string): string {
 /**
  * PayFast checkout field order.
  *
- * IMPORTANT:
- * This is NOT alphabetical order.
- * PayFast checkout signatures use the order
- * in which the checkout attributes are documented.
+ * PayFast requires the fields to be in the documented
+ * checkout attribute order, NOT alphabetical order.
  */
 export const CHECKOUT_FIELD_ORDER = [
   "merchant_id",
@@ -79,7 +83,13 @@ export const CHECKOUT_FIELD_ORDER = [
 ] as const;
 
 /**
- * Generate PayFast checkout signature.
+ * Generate a PayFast checkout signature.
+ *
+ * PayFast:
+ * 1. Uses fields in documented order
+ * 2. URL encodes values
+ * 3. Appends the passphrase
+ * 4. Generates an MD5 hash
  */
 export function generateSignature(
   data: Record<string, string>,
@@ -90,45 +100,55 @@ export function generateSignature(
   const parts: string[] = [];
 
   for (const key of CHECKOUT_FIELD_ORDER) {
-    const value = data[key];
+    const rawValue = data[key];
 
-    if (value !== undefined && value !== null && value !== "") {
-      parts.push(`${key}=${encodeValue(value)}`);
+    if (rawValue === undefined || rawValue === null) {
+      continue;
     }
+
+    const value = String(rawValue).trim();
+
+    if (value === "") {
+      continue;
+    }
+
+    parts.push(`${key}=${encodeValue(value)}`);
   }
 
   let parameterString = parts.join("&");
 
-  // PayFast requires the passphrase AFTER the checkout fields.
-  if (config.passphrase?.trim()) {
-    parameterString += `&passphrase=${encodeValue(
-      config.passphrase
-    )}`;
+  // PayFast requires the passphrase at the END.
+  const passphrase = config.passphrase?.trim();
+
+  if (passphrase) {
+    if (parameterString) {
+      parameterString += "&";
+    }
+
+    parameterString += `passphrase=${encodeValue(passphrase)}`;
   }
+
+  const signature = crypto
+    .createHash("md5")
+    .update(parameterString)
+    .digest("hex")
+    .toLowerCase();
 
   if (debug) {
     console.log("========== PAYFAST SIGNATURE DEBUG ==========");
     console.log("Parameter string:");
     console.log(parameterString);
     console.log("");
-
-    console.log(
-      "MD5:",
-      crypto.createHash("md5").update(parameterString).digest("hex")
-    );
-
-    console.log("============================================");
+    console.log("Generated MD5:");
+    console.log(signature);
+    console.log("=============================================");
   }
 
-  return crypto
-    .createHash("md5")
-    .update(parameterString)
-    .digest("hex")
-    .toLowerCase();
+  return signature;
 }
 
 /**
- * Build the data that will actually be sent to PayFast.
+ * Build the checkout data sent to PayFast.
  */
 export function buildCheckoutParams(
   subscriptionId: string,
@@ -139,6 +159,7 @@ export function buildCheckoutParams(
 ): Record<string, string> {
   const config = getPayfastConfig();
 
+  // Start subscription tomorrow.
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
 
@@ -147,11 +168,12 @@ export function buildCheckoutParams(
     `${String(tomorrow.getMonth() + 1).padStart(2, "0")}-` +
     `${String(tomorrow.getDate()).padStart(2, "0")}`;
 
+  // PayFast payment ID must be a simple identifier.
   const paymentId = subscriptionId.replace(/-/g, "");
 
   const amount = Number(PLANS[plan].amount).toFixed(2);
 
-  return {
+  const data: Record<string, string> = {
     merchant_id: config.merchantId.trim(),
     merchant_key: config.merchantKey.trim(),
 
@@ -166,7 +188,6 @@ export function buildCheckoutParams(
     m_payment_id: paymentId,
 
     amount,
-
     item_name: PLANS[plan].name.trim(),
     item_description: PLANS[plan].description.trim(),
 
@@ -177,15 +198,23 @@ export function buildCheckoutParams(
     frequency: "3",
     cycles: "0",
   };
+
+  return data;
 }
 
+/**
+ * Get the PayFast checkout URL.
+ */
 export function getPayFastUrl(): string {
   return PAYFAST_URL;
 }
-export function getPayFastUrl(): string {
-  return PAYFAST_URL;
-}
 
+/**
+ * Verify a PayFast ITN signature.
+ *
+ * IMPORTANT:
+ * The signature field itself is excluded.
+ */
 export function verifySignature(
   body: Record<string, string>
 ): boolean {
@@ -194,33 +223,44 @@ export function verifySignature(
   const receivedSignature = body.signature;
 
   if (!receivedSignature) {
+    console.error("[PayFast] No signature received");
     return false;
   }
 
   const parts: string[] = [];
 
-  for (const key of CHECKOUT_FIELD_ORDER) {
+  /**
+   * For ITN, reconstruct the submitted data while
+   * excluding the signature itself.
+   */
+  for (const [key, rawValue] of Object.entries(body)) {
     if (key === "signature") {
       continue;
     }
 
-    const value = body[key];
-
-    if (
-      value !== undefined &&
-      value !== null &&
-      value !== ""
-    ) {
-      parts.push(`${key}=${encodeValue(value)}`);
+    if (rawValue === undefined || rawValue === null) {
+      continue;
     }
+
+    const value = String(rawValue).trim();
+
+    if (value === "") {
+      continue;
+    }
+
+    parts.push(`${key}=${encodeValue(value)}`);
   }
 
   let parameterString = parts.join("&");
 
-  if (config.passphrase?.trim()) {
-    parameterString += `&passphrase=${encodeValue(
-      config.passphrase
-    )}`;
+  const passphrase = config.passphrase?.trim();
+
+  if (passphrase) {
+    if (parameterString) {
+      parameterString += "&";
+    }
+
+    parameterString += `passphrase=${encodeValue(passphrase)}`;
   }
 
   const expectedSignature = crypto
@@ -229,8 +269,15 @@ export function verifySignature(
     .digest("hex")
     .toLowerCase();
 
-  return (
-    receivedSignature.toLowerCase() ===
-    expectedSignature
-  );
+  const received = receivedSignature
+    .trim()
+    .toLowerCase();
+
+  console.log("[PayFast ITN] Signature verification:", {
+    received,
+    expected: expectedSignature,
+    match: received === expectedSignature,
+  });
+
+  return received === expectedSignature;
 }
