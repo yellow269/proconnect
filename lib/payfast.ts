@@ -8,7 +8,7 @@ const PAYFAST_URL =
   "https://sandbox.payfast.co.za/eng/process";
 
 /**
- * Encode a value using PayFast/PHP urlencode() style.
+ * PayFast uses PHP urlencode() style encoding.
  */
 function encodeValue(value: string): string {
   return encodeURIComponent(value.trim())
@@ -22,7 +22,9 @@ function encodeValue(value: string): string {
 }
 
 /**
- * PayFast checkout field order.
+ * Checkout fields in the exact order used by buildCheckoutParams().
+ *
+ * The order matters for the PayFast MD5 signature.
  */
 export const CHECKOUT_FIELD_ORDER = [
   "merchant_id",
@@ -30,35 +32,16 @@ export const CHECKOUT_FIELD_ORDER = [
   "return_url",
   "cancel_url",
   "notify_url",
-  "notify_method",
 
   "name_first",
   "name_last",
   "email_address",
-  "cell_number",
 
   "m_payment_id",
   "amount",
+
   "item_name",
   "item_description",
-
-  "custom_int1",
-  "custom_int2",
-  "custom_int3",
-  "custom_int4",
-  "custom_int5",
-
-  "custom_str1",
-  "custom_str2",
-  "custom_str3",
-  "custom_str4",
-  "custom_str5",
-
-  "email_confirmation",
-  "confirmation_address",
-
-  "currency",
-  "payment_method",
 
   "subscription_type",
   "billing_date",
@@ -66,13 +49,11 @@ export const CHECKOUT_FIELD_ORDER = [
   "frequency",
   "cycles",
 
-  "subscription_notify_email",
-  "subscription_notify_webhook",
-  "subscription_notify_buyer",
+  "currency",
 ] as const;
 
 /**
- * Generate PayFast checkout signature.
+ * Generate the PayFast checkout signature.
  */
 export function generateSignature(
   data: Record<string, string>,
@@ -112,7 +93,7 @@ export function generateSignature(
     console.log("Parameter string:");
     console.log(parameterString);
     console.log("");
-    console.log("MD5:");
+    console.log("Generated MD5:");
     console.log(signature);
     console.log("=============================================");
   }
@@ -121,7 +102,7 @@ export function generateSignature(
 }
 
 /**
- * Build PayFast checkout parameters.
+ * Build the exact data sent to PayFast.
  */
 export function buildCheckoutParams(
   subscriptionId: string,
@@ -159,6 +140,7 @@ export function buildCheckoutParams(
     m_payment_id: paymentId,
 
     amount,
+
     item_name: PLANS[plan].name.trim(),
     item_description: PLANS[plan].description.trim(),
 
@@ -167,25 +149,24 @@ export function buildCheckoutParams(
     recurring_amount: amount,
     frequency: "3",
     cycles: "0",
+
+    currency: "ZAR",
   };
 }
 
 /**
- * Get PayFast checkout URL.
+ * Get the PayFast checkout URL.
  */
 export function getPayFastUrl(): string {
   return PAYFAST_URL;
 }
 
 /**
- * Get PayFast checkout URL.
- */
-export function getPayFastUrl(): string {
-  return PAYFAST_URL;
-}
-
-/**
- * Verify PayFast ITN signature.
+ * Verify a PayFast ITN signature.
+ *
+ * IMPORTANT:
+ * ITN signatures must use the fields in the order
+ * PayFast sent them, excluding the signature itself.
  */
 export function verifySignature(
   body: Record<string, string>
@@ -195,15 +176,28 @@ export function verifySignature(
   const receivedSignature = body.signature;
 
   if (!receivedSignature) {
+    console.error("[PayFast] No signature received");
     return false;
   }
 
   const parts: string[] = [];
 
-  for (const key of CHECKOUT_FIELD_ORDER) {
-    const value = body[key];
+  /**
+   * Object.entries() preserves the order in which
+   * the PayFast POST fields were parsed.
+   */
+  for (const [key, rawValue] of Object.entries(body)) {
+    if (key === "signature") {
+      continue;
+    }
 
-    if (value === undefined || value === null || value === "") {
+    if (rawValue === undefined || rawValue === null) {
+      continue;
+    }
+
+    const value = String(rawValue).trim();
+
+    if (value === "") {
       continue;
     }
 
@@ -215,7 +209,8 @@ export function verifySignature(
   const passphrase = config.passphrase?.trim();
 
   if (passphrase) {
-    parameterString += `&passphrase=${encodeValue(passphrase)}`;
+    parameterString +=
+      `${parameterString ? "&" : ""}passphrase=${encodeValue(passphrase)}`;
   }
 
   const expectedSignature = crypto
@@ -224,8 +219,13 @@ export function verifySignature(
     .digest("hex")
     .toLowerCase();
 
-  return (
-    receivedSignature.trim().toLowerCase() ===
-    expectedSignature
-  );
+  const received = receivedSignature.trim().toLowerCase();
+
+  console.log("[PayFast] ITN signature verification:", {
+    received,
+    expected: expectedSignature,
+    match: received === expectedSignature,
+  });
+
+  return received === expectedSignature;
 }
