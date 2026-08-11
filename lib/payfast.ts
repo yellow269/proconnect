@@ -182,3 +182,55 @@ export function buildCheckoutParams(
 export function getPayFastUrl(): string {
   return PAYFAST_URL;
 }
+export function getPayFastUrl(): string {
+  return PAYFAST_URL;
+}
+
+export function verifySignature(
+  body: Record<string, string>
+): boolean {
+  const config = getPayfastConfig();
+
+  const receivedSignature = body.signature;
+
+  if (!receivedSignature) {
+    return false;
+  }
+
+  const parts: string[] = [];
+
+  for (const key of CHECKOUT_FIELD_ORDER) {
+    if (key === "signature") {
+      continue;
+    }
+
+    const value = body[key];
+
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ""
+    ) {
+      parts.push(`${key}=${encodeValue(value)}`);
+    }
+  }
+
+  let parameterString = parts.join("&");
+
+  if (config.passphrase?.trim()) {
+    parameterString += `&passphrase=${encodeValue(
+      config.passphrase
+    )}`;
+  }
+
+  const expectedSignature = crypto
+    .createHash("md5")
+    .update(parameterString)
+    .digest("hex")
+    .toLowerCase();
+
+  return (
+    receivedSignature.toLowerCase() ===
+    expectedSignature
+  );
+}
