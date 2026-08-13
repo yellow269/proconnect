@@ -46,7 +46,7 @@ export async function POST(request: Request) {
           { status: 429 }
         );
       }
-      return NextResponse.json({ error: signUpError.message }, { status: 400 });
+      return NextResponse.json({ error: "Registration failed. Please try again." }, { status: 400 });
     }
 
     if (!signUpData.user) {
@@ -56,12 +56,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const userId = signUpData.user.id;
-
     // Step 2: Auto-confirm the user (admin client)
     try {
       const admin = createAdminClient();
-      await admin.auth.admin.updateUserById(userId, { email_confirm: true });
+      await admin.auth.admin.updateUserById(signUpData.user.id, { email_confirm: true });
     } catch {
       // Best-effort — if admin key is missing, user may need email confirmation
     }
