@@ -24,6 +24,9 @@ function friendlyError(message: string): string {
   if (m.includes("signup disabled")) {
     return "Registration is temporarily disabled. Please try again later.";
   }
+  if (m.includes("email provider disabled") || m.includes("email logins are disabled")) {
+    return "Email login is not enabled. Please contact support.";
+  }
   if (m.includes("already registered") || m.includes("already exists")) {
     return "An account with this email already exists. Please log in instead.";
   }
@@ -45,7 +48,7 @@ function friendlyError(message: string): string {
   if (m.includes("network") || m.includes("fetch") || m.includes("connection")) {
     return "Unable to connect to the server. Please check your internet connection and try again.";
   }
-  return "Something went wrong. Please try again.";
+  return "We\u2019re having trouble connecting to the login service. Please try again later.";
 }
 
 export function AuthForm({ mode }: { mode: "login" | "register" | "forgot" | "reset" }) {
