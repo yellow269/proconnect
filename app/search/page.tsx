@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { MapPin, Star, Briefcase } from "lucide-react";
+import { MessageButton } from "@/components/messages/MessageButton";
 
 export default async function SearchPage({
   searchParams,
@@ -185,6 +186,9 @@ export default async function SearchPage({
                           {services}
                         </p>
                       )}
+                      <div className="mt-2">
+                        <MessageButton professionalId={pro.user_id} />
+                      </div>
                     </div>
                   </div>
                 </Link>

@@ -11,12 +11,14 @@ import {
   Star,
   FileText,
   Search,
+  MessageSquare,
 } from "lucide-react";
 
 const navItems = [
   { href: "/professional", label: "Overview", icon: LayoutDashboard },
   { href: "/professional/jobs", label: "Find Jobs", icon: Search },
   { href: "/professional/quotes", label: "My Quotes", icon: FileText },
+  { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/professional/services", label: "Services", icon: Wrench },
   { href: "/professional/availability", label: "Availability", icon: Clock },
   { href: "/professional/storefront", label: "Storefront", icon: Store },

@@ -1,7 +1,10 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import ChatInput from "@/app/components/messages/chat-input";
-import ChatWindow from "@/app/components/messages/chat-window";
+import ChatPage from "@/app/components/messages/chat-page";
+
+export const metadata = {
+  title: "Conversation | ProConnect",
+};
 
 export default async function ConversationPage({
   params,
@@ -9,20 +12,18 @@ export default async function ConversationPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-
   const supabase = await createClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    notFound();
-  }
+  if (!user) redirect("/login");
 
+  // Get conversation and verify participation
   const { data: conversation } = await supabase
     .from("conversations")
-    .select("*")
+    .select("id, customer_id, professional_id")
     .eq("id", id)
     .single();
 
@@ -34,36 +35,38 @@ export default async function ConversationPage({
     notFound();
   }
 
+  // Get other user info
+  const otherId =
+    conversation.customer_id === user.id
+      ? conversation.professional_id
+      : conversation.customer_id;
+
+  const { data: otherProfile } = await supabase
+    .from("profiles")
+    .select("full_name, avatar_url")
+    .eq("id", otherId)
+    .single();
+
+  // Get messages
   const { data: messages } = await supabase
     .from("messages")
-    .select("*")
+    .select("id, sender_id, message, created_at")
     .eq("conversation_id", id)
     .order("created_at", { ascending: true });
 
   return (
-    <main className="mx-auto max-w-4xl p-8">
-      <h1 className="mb-6 text-3xl font-bold">Conversation</h1>
-
-      <div className="rounded-lg border bg-white p-6 shadow-sm">
-        {!messages || messages.length === 0 ? (
-          <p className="text-slate-500">
-            No messages yet. Start the conversation below.
-          </p>
-        ) : (
-          <ChatWindow
-            conversationId={id}
-            userId={user.id}
-            initialMessages={messages.map((m) => ({
-              id: m.id,
-              sender_id: m.sender_id,
-              message: m.message,
-              created_at: m.created_at,
-            }))}
-          />
-        )}
-
-        <ChatInput conversationId={id} />
-      </div>
-    </main>
+    <ChatPage
+      conversationId={id}
+      userId={user.id}
+      otherUser={
+        otherProfile ?? { full_name: "User", avatar_url: null }
+      }
+      initialMessages={(messages ?? []).map((m) => ({
+        id: m.id,
+        sender_id: m.sender_id,
+        message: m.message,
+        created_at: m.created_at,
+      }))}
+    />
   );
 }

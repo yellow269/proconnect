@@ -726,6 +726,7 @@ export interface Database {
           conversation_id: string;
           sender_id: string;
           message: string;
+          read_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -733,6 +734,7 @@ export interface Database {
           conversation_id: string;
           sender_id: string;
           message: string;
+          read_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -740,6 +742,7 @@ export interface Database {
           conversation_id?: string;
           sender_id?: string;
           message?: string;
+          read_at?: string | null;
           created_at?: string;
         };
         Relationships: [
