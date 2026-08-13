@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
@@ -53,113 +52,61 @@ export async function POST(req: Request) {
     const planConfig = PLANS[planKey];
 
     // ==================================================
-    // 3. Check existing subscription
+    // 3. Check for active subscription
     // ==================================================
 
-    const {
-      data: existing,
-      error: existingError,
-    } = await supabase
+    const { data: activeSub, error: activeError } = await supabase
       .from("subscriptions")
-      .select("id, plan, status")
-      .or(
-        `user_id.eq.${user.id},professional_id.eq.${user.id}`
-      )
-      .in("status", [
-        "active",
-        "inactive",
-        "trialing",
-      ])
+      .select("id")
+      .or(`user_id.eq.${user.id},professional_id.eq.${user.id}`)
+      .eq("status", "active")
       .maybeSingle();
 
-    if (existingError) {
-      console.error(
-        "[PayFast] Existing subscription error:",
-        existingError.message
-      );
-
+    if (activeError) {
+      console.error("[PayFast] Active subscription check error:", activeError.message);
       return NextResponse.json(
-        {
-          error: "Unable to check subscription",
-        },
+        { error: "Unable to check subscription" },
         { status: 500 }
       );
     }
 
-    if (existing?.status === "active") {
+    if (activeSub) {
       return NextResponse.json(
-        {
-          error:
-            "You already have an active subscription",
-        },
+        { error: "You already have an active subscription" },
         { status: 400 }
       );
     }
 
     // ==================================================
-    // 4. Create or update subscription
+    // 4. Create or update subscription (upsert)
     // ==================================================
 
-    const subscriptionId =
-      existing?.id ?? crypto.randomUUID();
+    const { data: upserted, error: upsertError } = await supabase
+      .from("subscriptions")
+      .upsert(
+        {
+          user_id: user.id,
+          professional_id: user.id,
+          plan: planKey,
+          plan_name: planConfig.name,
+          amount: Number(planConfig.amount),
+          currency: "ZAR",
+          status: "inactive",
+        },
+        { onConflict: "professional_id" }
+      )
+      .select("id")
+      .single();
 
-    if (!existing) {
-      const { error: insertError } =
-        await supabase
-          .from("subscriptions")
-          .insert({
-            id: subscriptionId,
-            user_id: user.id,
-            professional_id: user.id,
-            plan: planKey,
-            plan_name: planConfig.name,
-            amount: Number(planConfig.amount),
-            currency: "ZAR",
-            status: "inactive",
-          });
-
-      if (insertError) {
-        console.error(
-          "[PayFast] Insert error:",
-          insertError.message
-        );
-
-        return NextResponse.json(
-          {
-            error:
-              "Failed to create subscription",
-          },
-          { status: 500 }
-        );
-      }
-    } else {
-      const { error: updateError } =
-        await supabase
-          .from("subscriptions")
-          .update({
-            plan: planKey,
-            plan_name: planConfig.name,
-            amount: Number(planConfig.amount),
-            currency: "ZAR",
-            status: "inactive",
-          })
-          .eq("id", subscriptionId);
-
-      if (updateError) {
-        console.error(
-          "[PayFast] Update error:",
-          updateError.message
-        );
-
-        return NextResponse.json(
-          {
-            error:
-              "Failed to update subscription",
-          },
-          { status: 500 }
-        );
-      }
+    if (upsertError || !upserted) {
+      console.error("[PayFast] Upsert error:", upsertError?.message);
+      return NextResponse.json(
+        { error: "Failed to create subscription" },
+        { status: 500 }
+      );
     }
+
+    const subscriptionId = upserted.id;
 
     // ==================================================
     // 5. Customer information
@@ -200,33 +147,10 @@ export async function POST(req: Request) {
     // ==================================================
 
     const signature =
-      generateSignature(data, true);
+      generateSignature(data);
 
     // ==================================================
-    // 8. FINAL PAYFAST PAYLOAD DEBUG
-    // ==================================================
-
-    console.log(
-      "========== FINAL PAYFAST PAYLOAD =========="
-    );
-
-    console.log(
-      JSON.stringify(
-        {
-          ...data,
-          signature,
-        },
-        null,
-        2
-      )
-    );
-
-    console.log(
-      "==========================================="
-    );
-
-    // ==================================================
-    // 9. Return PayFast checkout data
+    // 8. Return PayFast checkout data
     // ==================================================
 
     return NextResponse.json({

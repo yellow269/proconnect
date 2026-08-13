@@ -32,7 +32,6 @@ export async function POST() {
     .update({
       cancel_at_period_end: true,
       cancelled_at: now.toISOString(),
-      status: "cancelled",
     })
     .eq("id", subscription.id);
 
