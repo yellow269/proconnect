@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -18,11 +18,14 @@ function friendlyError(message: string): string {
   if (m.includes("user not found")) {
     return "No account found with this email. Please register first.";
   }
-  if (m.includes("too many requests") || m.includes("rate limit")) {
-    return "Too many attempts. Please wait a moment and try again.";
+  if (m.includes("too many requests") || m.includes("rate limit") || m.includes("too many")) {
+    return "Too many attempts. Please wait a few minutes and try again.";
   }
   if (m.includes("signup disabled")) {
     return "Registration is temporarily disabled. Please try again later.";
+  }
+  if (m.includes("already registered") || m.includes("already exists")) {
+    return "An account with this email already exists. Please log in instead.";
   }
   if (m.includes("email address is invalid")) {
     return "Please enter a valid email address.";
@@ -49,8 +52,12 @@ export function AuthForm({ mode }: { mode: "login" | "register" | "forgot" | "re
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const submitting = useRef(false);
 
   async function submit(formData: FormData) {
+    // Prevent double-submit
+    if (submitting.current) return;
+    submitting.current = true;
     setLoading(true);
     setError("");
 
@@ -72,59 +79,81 @@ export function AuthForm({ mode }: { mode: "login" | "register" | "forgot" | "re
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Check your details");
       setLoading(false);
+      submitting.current = false;
       return;
     }
 
     const supabase = createClient();
-    let result: { error: { message: string } | null };
 
     try {
       if (mode === "login") {
-        result = await supabase.auth.signInWithPassword({ email, password });
+        const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+        if (loginError) {
+          setError(friendlyError(loginError.message));
+          setLoading(false);
+          submitting.current = false;
+          return;
+        }
+        router.push("/dashboard");
+        router.refresh();
       } else if (mode === "register") {
-        // Use server-side registration with auto-confirm
+        // Single API call handles signup + confirm + login
         const res = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password, fullName, role }),
         });
         const data = await res.json();
+
         if (!res.ok) {
-          result = { error: { message: data.error || "Registration failed" } };
+          setError(friendlyError(data.error || "Registration failed"));
+          setLoading(false);
+          submitting.current = false;
+          return;
+        }
+
+        // Set session from API response
+        if (data.session?.access_token && data.session?.refresh_token) {
+          await supabase.auth.setSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          });
+          router.push("/dashboard");
+          router.refresh();
+        } else if (data.needsLogin) {
+          // Fallback: account created but no session — user must log in
+          router.push("/login?message=Account created successfully. Please log in.");
         } else {
-          // Registration succeeded — auto-login
-          result = await supabase.auth.signInWithPassword({ email, password });
+          router.push("/dashboard");
+          router.refresh();
         }
       } else if (mode === "forgot") {
-        result = await supabase.auth.resetPasswordForEmail(email, {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${location.origin}/reset-password`,
         });
-      } else {
-        result = await supabase.auth.updateUser({ password });
+        if (resetError) {
+          setError(friendlyError(resetError.message));
+          setLoading(false);
+          submitting.current = false;
+          return;
+        }
+        router.push("/login?message=Check your email for the password reset link.");
+      } else if (mode === "reset") {
+        const { error: updateError } = await supabase.auth.updateUser({ password });
+        if (updateError) {
+          setError(friendlyError(updateError.message));
+          setLoading(false);
+          submitting.current = false;
+          return;
+        }
+        router.push("/login?message=Password updated successfully. Please log in.");
+        router.refresh();
       }
     } catch {
-      setLoading(false);
       setError("Unable to connect to the server. Please check your internet connection.");
-      return;
-    }
-
-    if (result.error) {
-      setError(friendlyError(result.error.message));
       setLoading(false);
-      return;
+      submitting.current = false;
     }
-
-    if (mode === "forgot") {
-      router.push("/login?message=Check your email");
-    } else if (mode === "register") {
-      // Registration + auto-login succeeded — go to dashboard
-      router.push("/dashboard");
-    } else if (mode === "reset") {
-      router.push("/login?message=Password updated successfully");
-    } else {
-      router.push("/dashboard");
-    }
-    router.refresh();
   }
 
   async function google() {
@@ -144,7 +173,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" | "forgot" | "re
             name="role"
             className="h-11 w-full rounded-xl border bg-transparent px-3 text-sm dark:border-slate-700"
           >
-            <option value="customer">I need work done</option>
+            <option value="customer">I need a service</option>
             <option value="professional">I offer services</option>
           </select>
         </>
@@ -192,7 +221,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" | "forgot" | "re
 
       <Button className="w-full" disabled={loading}>
         {loading
-          ? "Please wait…"
+          ? "Please wait\u2026"
           : ({ login: "Log in", register: "Create account", forgot: "Send reset link", reset: "Update password" }[mode])}
       </Button>
 
