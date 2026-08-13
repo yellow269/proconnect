@@ -16,6 +16,17 @@ export default async function EditServicePage({ params }: Props) {
 
   if (!user) redirect("/login");
 
+  // Verify role
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "professional") {
+    redirect("/dashboard");
+  }
+
   const { data: service } = await supabase
     .from("services")
     .select("*")

@@ -18,6 +18,17 @@ export default async function ProfessionalDashboard() {
 
   if (!user) redirect("/login");
 
+  // Verify role
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "professional") {
+    redirect("/dashboard");
+  }
+
   // Get professional profile
   const { data: pro } = await supabase
     .from("professional_profiles")

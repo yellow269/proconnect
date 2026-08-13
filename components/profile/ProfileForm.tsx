@@ -11,12 +11,14 @@ type Props = {
   };
   profile: Tables<"profiles"> | null;
   professionalProfile: Tables<"professional_profiles"> | null;
+  role: string;
 };
 
 export default function ProfileForm({
   user,
   profile,
   professionalProfile,
+  role,
 }: Props) {
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
@@ -24,10 +26,14 @@ export default function ProfileForm({
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [city, setCity] = useState(profile?.city ?? "");
+  const [province, setProvince] = useState(profile?.province ?? "");
   const [businessName, setBusinessName] = useState(
     professionalProfile?.business_name ?? ""
   );
   const [bio, setBio] = useState(professionalProfile?.bio ?? "");
+  const [website, setWebsite] = useState(professionalProfile?.website ?? "");
+
+  const isProfessional = role === "professional";
 
   async function saveProfile() {
     setLoading(true);
@@ -39,6 +45,7 @@ export default function ProfileForm({
         full_name: fullName,
         phone: phone || null,
         city: city || null,
+        province: province || null,
       });
 
     if (profileError) {
@@ -47,7 +54,8 @@ export default function ProfileForm({
       return;
     }
 
-    if (professionalProfile || businessName) {
+    // Only save professional profile if user is a professional
+    if (isProfessional && (professionalProfile || businessName)) {
       const slug =
         professionalProfile?.slug ??
         businessName
@@ -62,6 +70,7 @@ export default function ProfileForm({
           business_name: businessName || "My Business",
           slug,
           bio: bio || null,
+          website: website || null,
         });
 
       if (proError) {
@@ -95,16 +104,26 @@ export default function ProfileForm({
         />
       </div>
 
-      <div>
-        <label className="mb-2 block font-medium">City</label>
-        <input
-          className="w-full rounded border p-3"
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-        />
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="mb-2 block font-medium">City</label>
+          <input
+            className="w-full rounded border p-3"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="mb-2 block font-medium">Province</label>
+          <input
+            className="w-full rounded border p-3"
+            value={province}
+            onChange={(e) => setProvince(e.target.value)}
+          />
+        </div>
       </div>
 
-      {professionalProfile !== undefined && (
+      {isProfessional && (
         <>
           <hr className="my-4" />
           <h3 className="text-lg font-semibold">Business Details</h3>
@@ -121,10 +140,21 @@ export default function ProfileForm({
           <div>
             <label className="mb-2 block font-medium">Bio</label>
             <textarea
-              rows={5}
+              rows={4}
               className="w-full rounded border p-3"
               value={bio}
               onChange={(e) => setBio(e.target.value)}
+              placeholder="Tell customers about your services..."
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block font-medium">Website</label>
+            <input
+              className="w-full rounded border p-3"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              placeholder="https://yourwebsite.co.za"
             />
           </div>
         </>

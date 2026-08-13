@@ -11,6 +11,17 @@ export default async function NewServicePage() {
 
   if (!user) redirect("/login");
 
+  // Verify role
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "professional") {
+    redirect("/dashboard");
+  }
+
   const { data: categories } = await supabase
     .from("categories")
     .select("*")

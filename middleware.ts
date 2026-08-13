@@ -2,8 +2,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const protectedPaths = ["/dashboard", "/jobs", "/quotes", "/profile", "/admin", "/professional"];
-
-// Paths that require an active Pro subscription
+const customerOnlyPaths = ["/jobs/new", "/dashboard/post-job"];
+const professionalOnlyPaths = ["/professional"];
 const proOnlyPaths = ["/messages"];
 
 export async function middleware(request: NextRequest) {
@@ -40,6 +40,30 @@ export async function middleware(request: NextRequest) {
     const login = new URL("/login", request.url);
     login.searchParams.set("next", pathname);
     return NextResponse.redirect(login);
+  }
+
+  // Role-based access control - only check if user is authenticated and path is role-restricted
+  if (user) {
+    const isCustomerOnly = customerOnlyPaths.some((path) => pathname === path);
+    const isProfessionalOnly = professionalOnlyPaths.some((path) => pathname.startsWith(path));
+
+    if (isCustomerOnly || isProfessionalOnly) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+      
+      const role = profile?.role as string | undefined;
+
+      if (isCustomerOnly && role === "professional") {
+        return NextResponse.redirect(new URL("/professional", request.url));
+      }
+
+      if (isProfessionalOnly && role === "customer") {
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
+    }
   }
 
   // Subscription check for pro-only paths
