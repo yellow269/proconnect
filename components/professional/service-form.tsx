@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import type { Tables } from "@/types/database";
 
 type Category = Tables<"categories">;
@@ -131,19 +132,12 @@ export function ServiceForm({ service, categories }: Props) {
         <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
           Category *
         </label>
-        <select
+        <SearchableSelect
+          options={categories.map((cat) => ({ value: cat.id, label: cat.name }))}
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-slate-700 dark:bg-slate-800"
-          required
-        >
-          <option value="">Select a category</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
+          onChange={setCategoryId}
+          placeholder="Select a category..."
+        />
       </div>
 
       <div>

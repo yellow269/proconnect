@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 type Category = {
   id: string;
@@ -121,18 +122,12 @@ export default function JobForm({ userId }: { userId: string }) {
 
       <div>
         <label className="mb-2 block font-medium">Category</label>
-        <select
-          className="w-full rounded border p-3"
+        <SearchableSelect
+          options={categories.map((cat) => ({ value: cat.id, label: cat.name }))}
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-        >
-          <option value="">Select Category</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
+          onChange={setCategoryId}
+          placeholder="Select a category..."
+        />
       </div>
 
       <div>
