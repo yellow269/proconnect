@@ -1,6 +1,13 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Star } from "lucide-react";
+import { ProfessionalReviews } from "@/components/reviews/ProfessionalReviews";
+import { ReviewCard } from "@/components/reviews/ReviewCard";
+import { Plus } from "lucide-react";
+
+export const metadata = {
+  title: "Reviews | ProConnect",
+};
 
 export default async function ReviewsPage() {
   const supabase = await createClient();
@@ -11,75 +18,177 @@ export default async function ReviewsPage() {
 
   if (!user) redirect("/login");
 
-  // Get reviews for this professional
+  // Get user role
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const role = profile?.role;
+
+  // Professional: show reviews received from customers
+  if (role === "professional") {
+    const { data: reviews } = await supabase
+      .from("reviews")
+      .select(
+        `
+        id, rating, comment, response, created_at, customer_id,
+        profiles!customer_id(full_name, avatar_url)
+      `
+      )
+      .eq("professional_id", user.id)
+      .order("created_at", { ascending: false });
+
+    const reviewList = (reviews ?? []) as unknown as {
+      id: string;
+      rating: number;
+      comment: string | null;
+      response: string | null;
+      created_at: string;
+      customer_id: string;
+      profiles: { full_name: string; avatar_url: string | null } | null;
+    }[];
+
+    // Calculate rating stats
+    const averageRating =
+      reviewList.length > 0
+        ? reviewList.reduce((sum, r) => sum + r.rating, 0) / reviewList.length
+        : 0;
+    const reviewCount = reviewList.length;
+    const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const r of reviewList) {
+      distribution[r.rating] = (distribution[r.rating] || 0) + 1;
+    }
+
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        <h1 className="text-3xl font-bold">Reviews</h1>
+        <p className="mt-2 text-slate-500">Reviews from your customers</p>
+
+        <div className="mt-8">
+          <ProfessionalReviews
+            reviews={reviewList}
+            averageRating={averageRating}
+            reviewCount={reviewCount}
+            distribution={distribution}
+          />
+        </div>
+      </main>
+    );
+  }
+
+  // Customer: show reviews they have written
   const { data: reviews } = await supabase
     .from("reviews")
     .select(
       `
-      id, rating, comment, response, created_at,
-      customer_id,
-      profiles!customer_id(full_name, avatar_url),
-      services!inner(title)
+      id, rating, comment, response, created_at, professional_id,
+      professional_profiles!reviews_professional_id_fkey(
+        user_id,
+        profiles:user_id(full_name, avatar_url)
+      )
     `
     )
-    .eq("professional_id", user.id)
+    .eq("customer_id", user.id)
     .order("created_at", { ascending: false });
+
+  const reviewList = (reviews ?? []) as unknown as {
+    id: string;
+    rating: number;
+    comment: string | null;
+    response: string | null;
+    created_at: string;
+    professional_id: string;
+    professional_profiles: {
+      user_id: string;
+      profiles: { full_name: string; avatar_url: string | null } | null;
+    } | null;
+  }[];
+
+  // Get completed jobs without reviews to show "Leave a Review" prompt
+  const { data: reviewedJobIds } = await supabase
+    .from("reviews")
+    .select("job_id")
+    .eq("customer_id", user.id);
+
+  const reviewedIds = (reviewedJobIds ?? []).map((r: { job_id: string }) => r.job_id);
+
+  let unreviewed: { id: string; title: string }[] = [];
+  if (reviewedIds.length > 0) {
+    const { data } = await supabase
+      .from("jobs")
+      .select("id, title")
+      .eq("customer_id", user.id)
+      .eq("status", "completed")
+      .not("id", "in", `(${reviewedIds.join(",")})`);
+    unreviewed = (data ?? []) as { id: string; title: string }[];
+  } else {
+    const { data } = await supabase
+      .from("jobs")
+      .select("id, title")
+      .eq("customer_id", user.id)
+      .eq("status", "completed");
+    unreviewed = (data ?? []) as { id: string; title: string }[];
+  }
 
   return (
     <main className="mx-auto max-w-4xl p-8">
-      <h1 className="text-3xl font-bold">Reviews</h1>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">My Reviews</h1>
+          <p className="mt-2 text-slate-500">Reviews you have submitted</p>
+        </div>
+        <Link
+          href="/dashboard/reviews/new"
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          <Plus className="h-4 w-4" />
+          Leave a Review
+        </Link>
+      </div>
 
-      <p className="mt-2 text-slate-500">
-        Reviews from your customers
-      </p>
+      {/* Pending reviews prompt */}
+      {unreviewed.length > 0 && (
+        <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm font-semibold text-blue-800">
+            You have {unreviewed.length} completed {unreviewed.length === 1 ? "job" : "jobs"} waiting for a review
+          </p>
+          <div className="mt-2 space-y-1">
+            {unreviewed.map((job) => (
+              <Link
+                key={job.id}
+                href="/dashboard/reviews/new"
+                className="block text-sm text-blue-600 hover:text-blue-800"
+              >
+                &bull; {job.title}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
-      <div className="mt-8 space-y-4">
-        {(!reviews || reviews.length === 0) ? (
+      <div className="mt-6 space-y-4">
+        {reviewList.length === 0 ? (
           <div className="rounded-lg border border-dashed p-8 text-center text-slate-400">
-            No reviews yet.
+            You haven&apos;t written any reviews yet.
           </div>
         ) : (
-          reviews.map((review) => {
-            const customer = review.profiles as { full_name: string; avatar_url: string | null } | null;
+          reviewList.map((review) => {
+            const proName =
+              (review.professional_profiles?.profiles as { full_name: string } | null)
+                ?.full_name ?? "Professional";
             return (
-              <div
+              <ReviewCard
                 key={review.id}
-                className="rounded-lg border bg-white p-6 shadow-sm"
-              >
-                <div className="flex items-start gap-4">
-                  <div>
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star
-                          key={star}
-                          className={`h-4 w-4 ${
-                            star <= review.rating
-                              ? "fill-yellow-400 text-yellow-400"
-                              : "text-gray-200"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <p className="mt-1 text-sm text-gray-500">
-                      by {customer?.full_name ?? "Anonymous"} on{" "}
-                      {new Date(review.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-
-                {review.comment && (
-                  <p className="mt-3 text-gray-700">{review.comment}</p>
-                )}
-
-                {review.response && (
-                  <div className="mt-4 rounded-lg bg-gray-50 p-4">
-                    <p className="text-sm font-semibold text-gray-700">
-                      Your response:
-                    </p>
-                    <p className="mt-1 text-gray-600">{review.response}</p>
-                  </div>
-                )}
-              </div>
+                reviewId={review.id}
+                rating={review.rating}
+                comment={review.comment}
+                response={review.response}
+                createdAt={review.created_at}
+                professionalName={proName}
+                showRole="customer"
+              />
             );
           })
         )}
