@@ -23,11 +23,3 @@ export const PLANS: Record<Exclude<SubscriptionPlan, "free">, PlanConfig> = {
     ],
   },
 };
-
-export const FREE_FEATURES = [
-  "5 Quotes per month",
-  "3 Active Jobs",
-  "Basic Messaging",
-  "Standard Listing",
-  "Basic Profile",
-];

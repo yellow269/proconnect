@@ -4,6 +4,9 @@ export type QuoteStatus = "pending" | "accepted" | "rejected" | "withdrawn";
 export type SubscriptionPlan = "free" | "pro";
 export type SubscriptionStatus = "inactive" | "trialing" | "active" | "past_due" | "cancelled" | "expired";
 export type NotificationType = "job" | "quote" | "review" | "subscription" | "system";
+export type PricingType = "fixed" | "starting_from" | "quote";
+export type BookingStatus = "pending" | "confirmed" | "in_progress" | "completed" | "cancelled";
+export type PaymentStatus = "unpaid" | "deposit_paid" | "paid" | "refunded";
 
 export interface Database {
   public: {
@@ -127,6 +130,11 @@ export interface Database {
           title: string;
           description: string | null;
           price_from: number | null;
+          pricing_type: PricingType;
+          fixed_price: number | null;
+          duration_minutes: number | null;
+          image_url: string | null;
+          sort_order: number;
           active: boolean;
           created_at: string;
           updated_at: string;
@@ -138,6 +146,11 @@ export interface Database {
           title: string;
           description?: string | null;
           price_from?: number | null;
+          pricing_type?: PricingType;
+          fixed_price?: number | null;
+          duration_minutes?: number | null;
+          image_url?: string | null;
+          sort_order?: number;
           active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -149,6 +162,11 @@ export interface Database {
           title?: string;
           description?: string | null;
           price_from?: number | null;
+          pricing_type?: PricingType;
+          fixed_price?: number | null;
+          duration_minutes?: number | null;
+          image_url?: string | null;
+          sort_order?: number;
           active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -741,6 +759,129 @@ export interface Database {
           },
         ];
       };
+      service_bookings: {
+        Row: {
+          id: string;
+          service_id: string;
+          professional_id: string;
+          customer_id: string;
+          booking_date: string;
+          start_time: string;
+          end_time: string;
+          status: BookingStatus;
+          payment_status: PaymentStatus;
+          total_amount: number;
+          deposit_amount: number | null;
+          notes: string | null;
+          address: string | null;
+          city: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          service_id: string;
+          professional_id: string;
+          customer_id: string;
+          booking_date: string;
+          start_time: string;
+          end_time: string;
+          status?: BookingStatus;
+          payment_status?: PaymentStatus;
+          total_amount: number;
+          deposit_amount?: number | null;
+          notes?: string | null;
+          address?: string | null;
+          city?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          service_id?: string;
+          professional_id?: string;
+          customer_id?: string;
+          booking_date?: string;
+          start_time?: string;
+          end_time?: string;
+          status?: BookingStatus;
+          payment_status?: PaymentStatus;
+          total_amount?: number;
+          deposit_amount?: number | null;
+          notes?: string | null;
+          address?: string | null;
+          city?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "service_bookings_service_id_fkey";
+            columns: ["service_id"];
+            isOneToOne: false;
+            referencedRelation: "services";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "service_bookings_professional_id_fkey";
+            columns: ["professional_id"];
+            isOneToOne: false;
+            referencedRelation: "professional_profiles";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "service_bookings_customer_id_fkey";
+            columns: ["customer_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      professional_storefront_settings: {
+        Row: {
+          user_id: string;
+          whatsapp_number: string | null;
+          custom_description: string | null;
+          cover_image_url: string | null;
+          service_area: string | null;
+          show_portfolio: boolean;
+          show_reviews: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          whatsapp_number?: string | null;
+          custom_description?: string | null;
+          cover_image_url?: string | null;
+          service_area?: string | null;
+          show_portfolio?: boolean;
+          show_reviews?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          whatsapp_number?: string | null;
+          custom_description?: string | null;
+          cover_image_url?: string | null;
+          service_area?: string | null;
+          show_portfolio?: boolean;
+          show_reviews?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "professional_storefront_settings_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "professional_profiles";
+            referencedColumns: ["user_id"];
+          },
+        ];
+      };
     };
     Views: {};
     Functions: {
@@ -751,6 +892,24 @@ export interface Database {
       seed_categories: {
         Args: Record<string, never>;
         Returns: void;
+      };
+      has_booking_conflict: {
+        Args: {
+          p_professional_id: string;
+          p_date: string;
+          p_start_time: string;
+          p_end_time: string;
+          p_exclude_booking_id?: string;
+        };
+        Returns: boolean;
+      };
+      get_available_slots: {
+        Args: {
+          p_professional_id: string;
+          p_date: string;
+          p_duration_minutes: number;
+        };
+        Returns: { slot_start: string; slot_end: string }[];
       };
     };
     Enums: {

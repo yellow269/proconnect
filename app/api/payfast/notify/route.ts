@@ -1,20 +1,23 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { verifySignature } from "@/lib/payfast";
 
-function reconstructUUID(stripped: string): string {
+function reconstructUUID(stripped: string): string | null {
   if (stripped.length === 32 && /^[0-9a-f]{32}$/i.test(stripped)) {
     return `${stripped.slice(0, 8)}-${stripped.slice(8, 12)}-${stripped.slice(12, 16)}-${stripped.slice(16, 20)}-${stripped.slice(20)}`;
   }
-  return stripped;
+  return null;
 }
 
 export async function POST(req: Request) {
-  const formData = await req.formData();
+  const raw = await req.text();
+  const params = new URLSearchParams(raw);
   const body: Record<string, string> = {};
-  formData.forEach((value, key) => {
-    body[key] = value.toString();
+  params.forEach((value, key) => {
+    body[key] = value;
   });
+
+  console.log("[PayFast ITN] Received fields:", Object.keys(body));
 
   if (!verifySignature(body)) {
     console.error("[PayFast ITN] Invalid signature");
@@ -31,7 +34,13 @@ export async function POST(req: Request) {
   }
 
   const subscriptionId = reconstructUUID(rawPaymentId);
-  const supabase = await createClient();
+
+  if (!subscriptionId) {
+    console.error("[PayFast ITN] Invalid payment ID format:", rawPaymentId);
+    return new NextResponse("Invalid payment ID", { status: 400 });
+  }
+
+  const supabase = createAdminClient();
 
   const now = new Date();
   const periodEnd = new Date(now);
@@ -39,9 +48,25 @@ export async function POST(req: Request) {
 
   const nextBilling = new Date(periodEnd);
 
+  const { data: subscription, error: fetchError } = await supabase
+    .from("subscriptions")
+    .select("id, current_period_end")
+    .eq("id", subscriptionId)
+    .single();
+
+  if (fetchError || !subscription) {
+    console.error("[PayFast ITN] Subscription not found:", subscriptionId);
+    return new NextResponse("Subscription not found", { status: 404 });
+  }
+
   switch (paymentStatus) {
     case "COMPLETE":
     case "SUCCESS": {
+      if (subscription.current_period_end && new Date(subscription.current_period_end) > now) {
+        console.log(`[PayFast ITN] Duplicate notification for ${subscriptionId}, skipping`);
+        break;
+      }
+
       const { error } = await supabase
         .from("subscriptions")
         .update({

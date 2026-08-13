@@ -58,8 +58,7 @@ export const CHECKOUT_FIELD_ORDER = [
  * Generate PayFast MD5 signature.
  */
 export function generateSignature(
-  data: Record<string, string>,
-  debug = false
+  data: Record<string, string>
 ): string {
   const config = getPayfastConfig();
 
@@ -90,14 +89,6 @@ export function generateSignature(
     .update(parameterString)
     .digest("hex")
     .toLowerCase();
-
-  if (debug) {
-    console.log("========== PAYFAST SIGNATURE DEBUG ==========");
-    console.log("Fields used:", parts.length);
-    console.log("Parameter string:", parameterString);
-    console.log("Generated MD5:", signature);
-    console.log("=============================================");
-  }
 
   return signature;
 }
@@ -183,8 +174,8 @@ export function verifySignature(
   const parts: string[] = [];
 
   /**
-   * IMPORTANT:
-   * Use the order in which the fields were received.
+   * PayFast ITN verification uses the order fields are received,
+   * matching the PayFast PHP SDK behaviour.
    */
   for (const [key, rawValue] of Object.entries(body)) {
     if (key === "signature") {
@@ -195,11 +186,7 @@ export function verifySignature(
       continue;
     }
 
-    const value = String(rawValue).trim();
-
-    if (value === "") {
-      continue;
-    }
+    const value = String(rawValue);
 
     parts.push(`${key}=${encodeValue(value)}`);
   }
@@ -221,12 +208,6 @@ export function verifySignature(
     .toLowerCase();
 
   const received = receivedSignature.trim().toLowerCase();
-
-  console.log("[PayFast] ITN signature verification:", {
-    received,
-    expected: expectedSignature,
-    match: received === expectedSignature,
-  });
 
   return received === expectedSignature;
 }

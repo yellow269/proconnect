@@ -102,13 +102,6 @@ const profile = data as Tables<"profiles"> | null;
             >
               ❤️ Favorites
             </Link>
-
-            <Link
-              href="/dashboard/subscription"
-              className="rounded-lg border p-4 text-center hover:bg-slate-50"
-            >
-              💳 Subscription
-            </Link>
           </div>
         </div>
       )}

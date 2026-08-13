@@ -159,12 +159,6 @@ export function SubscriptionManager({ subscription, paymentStatus }: Props) {
                 </span>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold">
-                R{localSub.amount ?? "150.00"}
-                <span className="text-sm font-normal text-slate-500">/mo</span>
-              </p>
-            </div>
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-4 border-t border-slate-100 pt-6 dark:border-slate-800">
@@ -230,10 +224,6 @@ export function SubscriptionManager({ subscription, paymentStatus }: Props) {
             <p className="mt-2 text-sm text-slate-500">
               {PLANS.pro.description}
             </p>
-            <p className="mt-6 text-4xl font-bold">
-              R150
-              <span className="text-sm font-normal text-slate-500">/month</span>
-            </p>
           </div>
 
           <ul className="mt-8 space-y-3">
@@ -286,7 +276,7 @@ export function SubscriptionManager({ subscription, paymentStatus }: Props) {
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
               {[
-                { name: "Quotes", free: "5/month", pro: "Unlimited" },
+                { name: "Quotes", free: "5 per month", pro: "Unlimited" },
                 { name: "Jobs", free: "3 active", pro: "Unlimited" },
                 { name: "Messaging", free: "Basic", pro: "Unlimited" },
                 { name: "Verified Badge", free: false, pro: true },

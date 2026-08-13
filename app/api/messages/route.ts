@@ -33,8 +33,9 @@ export async function POST(req: Request) {
     });
 
   if (error) {
+    console.error("[Messages] Insert error:", error.message);
     return NextResponse.json(
-      { error: error.message },
+      { error: "Failed to send message" },
       { status: 500 }
     );
   }

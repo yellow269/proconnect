@@ -1,11 +1,6 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-
-type Review = {
-  id: string;
-  rating: number;
-  comment: string | null;
-  created_at: string;
-};
+import { Star } from "lucide-react";
 
 export default async function ReviewsPage() {
   const supabase = await createClient();
@@ -14,70 +9,81 @@ export default async function ReviewsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return (
-      <main className="mx-auto max-w-5xl p-8">
-        <h1 className="text-3xl font-bold">Reviews</h1>
-        <p>Please log in.</p>
-      </main>
-    );
-  }
+  if (!user) redirect("/login");
 
-  const { data: reviews, error } = await supabase
+  // Get reviews for this professional
+  const { data: reviews } = await supabase
     .from("reviews")
-    .select("*")
+    .select(
+      `
+      id, rating, comment, response, created_at,
+      customer_id,
+      profiles!customer_id(full_name, avatar_url),
+      services!inner(title)
+    `
+    )
     .eq("professional_id", user.id)
     .order("created_at", { ascending: false });
 
-  if (error) {
-    return (
-      <main className="mx-auto max-w-5xl p-8">
-        <h1 className="text-3xl font-bold">Reviews</h1>
-        <p className="text-red-500">{error.message}</p>
-      </main>
-    );
-  }
-
-  const typedReviews = (reviews ?? []) as Review[];
-
   return (
-    <main className="mx-auto max-w-5xl p-8">
+    <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-3xl font-bold">Reviews</h1>
 
-      {typedReviews.length === 0 ? (
-        <div className="mt-8 rounded-lg border bg-white p-8 text-center shadow">
-          <h2 className="text-xl font-semibold">
-            No reviews yet
-          </h2>
+      <p className="mt-2 text-slate-500">
+        Reviews from your customers
+      </p>
 
-          <p className="mt-2 text-slate-500">
-            When customers review your work, they&apos;ll appear here.
-          </p>
-        </div>
-      ) : (
-        <div className="mt-8 space-y-4">
-          {typedReviews.map((review) => (
-            <div
-              key={review.id}
-              className="rounded-lg border bg-white p-6 shadow-sm"
-            >
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">
-                  ⭐ {review.rating}/5
-                </h2>
+      <div className="mt-8 space-y-4">
+        {(!reviews || reviews.length === 0) ? (
+          <div className="rounded-lg border border-dashed p-8 text-center text-slate-400">
+            No reviews yet.
+          </div>
+        ) : (
+          reviews.map((review) => {
+            const customer = review.profiles as { full_name: string; avatar_url: string | null } | null;
+            return (
+              <div
+                key={review.id}
+                className="rounded-lg border bg-white p-6 shadow-sm"
+              >
+                <div className="flex items-start gap-4">
+                  <div>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`h-4 w-4 ${
+                            star <= review.rating
+                              ? "fill-yellow-400 text-yellow-400"
+                              : "text-gray-200"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      by {customer?.full_name ?? "Anonymous"} on{" "}
+                      {new Date(review.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
 
-                <span className="text-sm text-slate-500">
-                  {new Date(review.created_at).toLocaleDateString()}
-                </span>
+                {review.comment && (
+                  <p className="mt-3 text-gray-700">{review.comment}</p>
+                )}
+
+                {review.response && (
+                  <div className="mt-4 rounded-lg bg-gray-50 p-4">
+                    <p className="text-sm font-semibold text-gray-700">
+                      Your response:
+                    </p>
+                    <p className="mt-1 text-gray-600">{review.response}</p>
+                  </div>
+                )}
               </div>
-
-              <p className="mt-4 text-slate-600">
-                {review.comment}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
+            );
+          })
+        )}
+      </div>
     </main>
   );
 }
