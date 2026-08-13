@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
     const validRole = role === "professional" ? "professional" : "customer";
 
-    // Step 1: Sign up the user (server-side)
+    // Step 1: Sign up the user
     const supabase = await createClient();
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
@@ -46,7 +46,10 @@ export async function POST(request: Request) {
           { status: 429 }
         );
       }
-      return NextResponse.json({ error: "Registration failed. Please try again." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Registration failed. Please try again." },
+        { status: 400 }
+      );
     }
 
     if (!signUpData.user) {
@@ -56,30 +59,58 @@ export async function POST(request: Request) {
       );
     }
 
-    // Step 2: Auto-confirm the user (admin client)
+    // Step 2: Auto-confirm the user using admin client
+    let confirmed = false;
     try {
       const admin = createAdminClient();
-      await admin.auth.admin.updateUserById(signUpData.user.id, { email_confirm: true });
+      await admin.auth.admin.updateUserById(signUpData.user.id, {
+        email_confirm: true,
+      });
+      confirmed = true;
     } catch {
-      // Best-effort — if admin key is missing, user may need email confirmation
+      // Admin client unavailable — email confirmation required
     }
 
-    // Step 3: Sign in the user to get a session (server-side)
-    const { data: sessionData, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    if (!confirmed) {
+      // Could not auto-confirm. Try to sign in anyway in case
+      // the Supabase project has auto-confirm enabled.
+      const { data: sessionData } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (sessionData?.session) {
+        return NextResponse.json({
+          success: true,
+          session: {
+            access_token: sessionData.session.access_token,
+            refresh_token: sessionData.session.refresh_token,
+            expires_at: sessionData.session.expires_at,
+          },
+        });
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            "Account created but email confirmation is required. Please check your email for a confirmation link, or contact support.",
+        },
+        { status: 200 }
+      );
+    }
+
+    // Step 3: Sign in to get a session
+    const { data: sessionData, error: signInError } =
+      await supabase.auth.signInWithPassword({ email, password });
 
     if (signInError) {
-      // Account created but can't auto-login — tell user to log in manually
-      return NextResponse.json({
-        success: true,
-        message: "Account created. Please log in.",
-        needsLogin: true,
-      });
+      return NextResponse.json(
+        { error: "Account created. Please log in." },
+        { status: 200 }
+      );
     }
 
-    // Step 4: Return session tokens for the client to use
+    // Step 4: Return session tokens
     return NextResponse.json({
       success: true,
       session: {

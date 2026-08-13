@@ -120,12 +120,14 @@ export function AuthForm({ mode }: { mode: "login" | "register" | "forgot" | "re
           });
           router.push("/dashboard");
           router.refresh();
-        } else if (data.needsLogin) {
-          // Fallback: account created but no session — user must log in
-          router.push("/login?message=Account created successfully. Please log in.");
         } else {
-          router.push("/dashboard");
-          router.refresh();
+          // Account created but cannot auto-login (email confirmation needed)
+          setError(
+            data.error ||
+              "Account created. Please check your email for a confirmation link before logging in."
+          );
+          setLoading(false);
+          submitting.current = false;
         }
       } else if (mode === "forgot") {
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
