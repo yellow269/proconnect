@@ -17,15 +17,17 @@ export default async function SearchPage({
 
   const supabase = await createClient();
 
+  // Get all categories for filters
+  const { data: allCategories } = await supabase
+    .from("categories")
+    .select("id, name, slug")
+    .order("name");
+
   // Get category name and ID if slug provided
   let categoryName = "All Services";
   let categoryId: string | null = null;
   if (categorySlug) {
-    const { data: cat } = await supabase
-      .from("categories")
-      .select("id, name")
-      .eq("slug", categorySlug)
-      .single();
+    const cat = (allCategories ?? []).find((c) => c.slug === categorySlug);
     if (cat) {
       categoryName = cat.name;
       categoryId = cat.id;
@@ -56,7 +58,7 @@ export default async function SearchPage({
     dbQuery = dbQuery.ilike("business_name", `%${query}%`);
   }
 
-  const { data: professionals } = await dbQuery.limit(20);
+  const { data: professionals, error: searchError } = await dbQuery.limit(20);
 
   // Get current user's favorites
   const {
@@ -80,12 +82,13 @@ export default async function SearchPage({
             {categoryName}
           </h1>
           <p className="mt-2 text-slate-500">
-            {professionals?.length ?? 0} professional
-            {(professionals?.length ?? 0) !== 1 ? "s" : ""} found
+            {searchError
+              ? "Unable to load professionals. Please try again."
+              : `${professionals?.length ?? 0} professional${(professionals?.length ?? 0) !== 1 ? "s" : ""} found`}
           </p>
         </div>
 
-        {/* Filters */}
+        {/* Filters — show top categories from database */}
         <div className="mb-6 flex flex-wrap gap-3">
           <Link
             href="/search"
@@ -97,40 +100,32 @@ export default async function SearchPage({
           >
             All
           </Link>
-          <Link
-            href="/search?category=plumber"
-            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-              categorySlug === "plumber"
-                ? "bg-brand-600 text-white"
-                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
-            }`}
-          >
-            Plumbers
-          </Link>
-          <Link
-            href="/search?category=electrician"
-            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-              categorySlug === "electrician"
-                ? "bg-brand-600 text-white"
-                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
-            }`}
-          >
-            Electricians
-          </Link>
-          <Link
-            href="/search?category=web-development"
-            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-              categorySlug === "web-development"
-                ? "bg-brand-600 text-white"
-                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
-            }`}
-          >
-            Web Developers
-          </Link>
+          {(allCategories ?? []).slice(0, 12).map((cat) => (
+            <Link
+              key={cat.slug}
+              href={`/search?category=${cat.slug}`}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                categorySlug === cat.slug
+                  ? "bg-brand-600 text-white"
+                  : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+              }`}
+            >
+              {cat.name}
+            </Link>
+          ))}
         </div>
 
         {/* Results */}
-        {!professionals || professionals.length === 0 ? (
+        {searchError ? (
+          <div className="rounded-2xl border border-dashed border-red-300 bg-white p-12 text-center dark:border-red-700 dark:bg-slate-900">
+            <h2 className="text-lg font-semibold text-red-700 dark:text-red-300">
+              Unable to load professionals
+            </h2>
+            <p className="mt-2 text-sm text-red-500">
+              Please try again later.
+            </p>
+          </div>
+        ) : !professionals || professionals.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center dark:border-slate-700 dark:bg-slate-900">
             <Briefcase className="mx-auto h-12 w-12 text-slate-300" />
             <h2 className="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-300">

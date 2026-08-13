@@ -111,6 +111,25 @@ export async function POST(request: Request) {
     }
 
     // Step 4: Return session tokens
+    // Step 5: Auto-create professional profile if role is professional
+    if (validRole === "professional" && sessionData?.session) {
+      const adminClient = createAdminClient();
+      const slug = fullName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 60);
+
+      await adminClient.from("professional_profiles").upsert(
+        {
+          user_id: signUpData.user.id,
+          business_name: fullName,
+          slug,
+        },
+        { onConflict: "user_id" }
+      );
+    }
+
     return NextResponse.json({
       success: true,
       session: {
