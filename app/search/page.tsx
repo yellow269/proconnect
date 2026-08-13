@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { MapPin, Star, Briefcase } from "lucide-react";
 import { MessageButton } from "@/components/messages/MessageButton";
+import { FavoriteButton } from "@/components/favorites/FavoriteButton";
 
 export default async function SearchPage({
   searchParams,
@@ -56,6 +57,19 @@ export default async function SearchPage({
   }
 
   const { data: professionals } = await dbQuery.limit(20);
+
+  // Get current user's favorites
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let favoriteIds = new Set<string>();
+  if (user) {
+    const { data: favs } = await supabase
+      .from("favorites")
+      .select("professional_id")
+      .eq("customer_id", user.id);
+    favoriteIds = new Set((favs ?? []).map((f) => f.professional_id));
+  }
 
   return (
     <>
@@ -186,8 +200,12 @@ export default async function SearchPage({
                           {services}
                         </p>
                       )}
-                      <div className="mt-2">
+                      <div className="mt-2 flex items-center gap-3">
                         <MessageButton professionalId={pro.user_id} />
+                        <FavoriteButton
+                          professionalId={pro.user_id}
+                          initialFavorited={favoriteIds.has(pro.user_id)}
+                        />
                       </div>
                     </div>
                   </div>
