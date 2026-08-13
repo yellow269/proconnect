@@ -87,6 +87,7 @@ export default function JobForm({ userId }: { userId: string }) {
         budget_min: budgetMin ? Number(budgetMin) : null,
         budget_max: budgetMax ? Number(budgetMax) : null,
         status: "open",
+        published_at: new Date().toISOString(),
       },
     ]);
 

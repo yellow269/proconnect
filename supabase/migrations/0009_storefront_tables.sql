@@ -1,4 +1,5 @@
 -- ProConnect Storefront tables: bookings, storefront settings, service enhancements
+-- Idempotent: safe to re-run
 
 -- ============================================================
 -- 1. Enhance services table
@@ -15,7 +16,7 @@ alter table public.services add column if not exists sort_order integer not null
 -- 2. service_bookings table
 -- ============================================================
 
-create table public.service_bookings (
+create table if not exists public.service_bookings (
   id uuid primary key default gen_random_uuid(),
   service_id uuid not null references public.services(id) on delete cascade,
   professional_id uuid not null references public.professional_profiles(user_id) on delete cascade,
@@ -36,16 +37,16 @@ create table public.service_bookings (
   updated_at timestamptz not null default now()
 );
 
-create index service_bookings_professional_idx on public.service_bookings(professional_id, booking_date, status);
-create index service_bookings_customer_idx on public.service_bookings(customer_id, created_at desc);
-create index service_bookings_date_idx on public.service_bookings(booking_date, start_time, end_time) where status not in ('cancelled');
-create index service_bookings_service_idx on public.service_bookings(service_id);
+create index if not exists service_bookings_professional_idx on public.service_bookings(professional_id, booking_date, status);
+create index if not exists service_bookings_customer_idx on public.service_bookings(customer_id, created_at desc);
+create index if not exists service_bookings_date_idx on public.service_bookings(booking_date, start_time, end_time) where status not in ('cancelled');
+create index if not exists service_bookings_service_idx on public.service_bookings(service_id);
 
 -- ============================================================
 -- 3. professional_storefront_settings table
 -- ============================================================
 
-create table public.professional_storefront_settings (
+create table if not exists public.professional_storefront_settings (
   user_id uuid primary key references public.professional_profiles(user_id) on delete cascade,
   whatsapp_number text,
   custom_description text,
@@ -61,7 +62,10 @@ create table public.professional_storefront_settings (
 -- 4. Triggers for updated_at
 -- ============================================================
 
+drop trigger if exists service_bookings_updated on public.service_bookings;
 create trigger service_bookings_updated before update on public.service_bookings for each row execute function public.set_updated_at();
+
+drop trigger if exists professional_storefront_settings_updated on public.professional_storefront_settings;
 create trigger professional_storefront_settings_updated before update on public.professional_storefront_settings for each row execute function public.set_updated_at();
 
 -- ============================================================
@@ -75,8 +79,7 @@ alter table public.professional_storefront_settings enable row level security;
 -- 6. RLS Policies — service_bookings
 -- ============================================================
 
--- Anyone can see bookings (needed for double-booking check by service)
--- but customer/professional details are protected by their own table policies
+drop policy if exists "bookings readable by parties" on public.service_bookings;
 create policy "bookings readable by parties"
   on public.service_bookings for select
   using (
@@ -85,7 +88,7 @@ create policy "bookings readable by parties"
     or public.is_admin()
   );
 
--- Customers can create bookings
+drop policy if exists "customers create bookings" on public.service_bookings;
 create policy "customers create bookings"
   on public.service_bookings for insert
   with check (
@@ -93,19 +96,19 @@ create policy "customers create bookings"
     and exists(select 1 from public.profiles where id = auth.uid() and role = 'customer')
   );
 
--- Professional can update status of their bookings
+drop policy if exists "professionals update booking status" on public.service_bookings;
 create policy "professionals update booking status"
   on public.service_bookings for update
   using (professional_id = auth.uid())
   with check (professional_id = auth.uid());
 
--- Customer can cancel their own bookings
+drop policy if exists "customers cancel own bookings" on public.service_bookings;
 create policy "customers cancel own bookings"
   on public.service_bookings for update
   using (customer_id = auth.uid())
   with check (customer_id = auth.uid() and status = 'cancelled');
 
--- Admins can manage all bookings
+drop policy if exists "admins manage bookings" on public.service_bookings;
 create policy "admins manage bookings"
   on public.service_bookings for all
   using (public.is_admin())
@@ -115,12 +118,12 @@ create policy "admins manage bookings"
 -- 7. RLS Policies — professional_storefront_settings
 -- ============================================================
 
--- Storefront settings are publicly readable (for public storefront page)
+drop policy if exists "storefront settings readable" on public.professional_storefront_settings;
 create policy "storefront settings readable"
   on public.professional_storefront_settings for select
   using (true);
 
--- Professionals manage their own settings
+drop policy if exists "professionals manage storefront" on public.professional_storefront_settings;
 create policy "professionals manage storefront"
   on public.professional_storefront_settings for all
   using (user_id = auth.uid())
@@ -195,7 +198,12 @@ as $$
 $$;
 
 -- ============================================================
--- 10. Add service_bookings to realtime
+-- 10. Add service_bookings to realtime (safe to re-run)
 -- ============================================================
 
-alter publication supabase_realtime add table public.service_bookings;
+do $$
+begin
+  alter publication supabase_realtime add table public.service_bookings;
+exception when duplicate_object then
+  null;
+end $$;
