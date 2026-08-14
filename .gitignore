@@ -9,5 +9,4 @@ test-results
 *.tsbuildinfo
 .vercel
 dev-output2.log
-
-dev-output2.log
+supabase/.temp/
