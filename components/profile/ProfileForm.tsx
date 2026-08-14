@@ -22,6 +22,8 @@ export default function ProfileForm({
 }: Props) {
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
@@ -37,28 +39,45 @@ export default function ProfileForm({
 
   async function saveProfile() {
     setLoading(true);
+    setError(null);
+    setSuccess(false);
 
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .upsert({
-        id: user.id,
-        full_name: fullName,
-        phone: phone || null,
-        city: city || null,
-        province: province || null,
-      });
-
-    if (profileError) {
-      alert(profileError.message);
+    // Validate
+    if (!fullName.trim()) {
+      setError("Full name is required.");
       setLoading(false);
       return;
     }
 
-    // Only save professional profile if user is a professional
-    if (isProfessional && (professionalProfile || businessName)) {
+    if (isProfessional && !businessName.trim()) {
+      setError("Business name is required for professionals.");
+      setLoading(false);
+      return;
+    }
+
+    // Save base profile
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert({
+        id: user.id,
+        full_name: fullName.trim(),
+        phone: phone.trim() || null,
+        city: city.trim() || null,
+        province: province.trim() || null,
+      });
+
+    if (profileError) {
+      setError(profileError.message);
+      setLoading(false);
+      return;
+    }
+
+    // Save professional profile
+    if (isProfessional) {
       const slug =
         professionalProfile?.slug ??
         businessName
+          .trim()
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-|-$/g, "");
@@ -67,21 +86,25 @@ export default function ProfileForm({
         .from("professional_profiles")
         .upsert({
           user_id: user.id,
-          business_name: businessName || "My Business",
+          business_name: businessName.trim(),
           slug,
-          bio: bio || null,
-          website: website || null,
+          bio: bio.trim() || null,
+          website: website.trim() || null,
         });
 
       if (proError) {
-        alert(proError.message);
+        setError(proError.message);
         setLoading(false);
         return;
       }
     }
 
+    console.log("PROFILE SAVE SUCCESS", user.id);
     setLoading(false);
-    alert("Profile saved successfully!");
+
+    if (isProfessional) {
+      window.location.href = "/professional";
+    }
   }
 
   return (
@@ -158,6 +181,19 @@ export default function ProfileForm({
             />
           </div>
         </>
+      )}
+
+      {error && (
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+          Profile saved successfully!
+          {isProfessional && " Redirecting..."}
+        </div>
       )}
 
       <button

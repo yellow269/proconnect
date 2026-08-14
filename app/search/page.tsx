@@ -34,44 +34,91 @@ export default async function SearchPage({
     }
   }
 
-  // Build query — use category_id for reliable filtering
-  let dbQuery = supabase
+  // Step 1: Fetch professional_profiles with their profile data
+  // Use a simple query without complex embeds to avoid PostgREST relationship resolution issues
+  let profQuery = supabase
     .from("professional_profiles")
     .select(
       `
       user_id, business_name, slug, bio, verified, average_rating, review_count,
-      profiles!inner(full_name, avatar_url, city, province),
-      services(id, title, price_from, category_id)
+      profiles!inner(full_name, avatar_url, city, province)
     `
     )
     .eq("available", true);
 
-  if (categoryId) {
-    dbQuery = dbQuery.eq("services.category_id", categoryId);
-  }
-
   if (location) {
-    dbQuery = dbQuery.ilike("profiles.city", `%${location}%`);
+    profQuery = profQuery.ilike("profiles.city", `%${location}%`);
   }
 
   if (query) {
-    dbQuery = dbQuery.ilike("business_name", `%${query}%`);
+    profQuery = profQuery.ilike("business_name", `%${query}%`);
   }
 
-  const { data: professionals, error: searchError } = await dbQuery.limit(20);
+  const { data: profData, error: profError } = await profQuery.limit(20);
+
+  if (profError) {
+    console.error("[search] Professional query error:", JSON.stringify(profError));
+  }
+
+  // Step 2: Fetch services separately for the returned professionals
+  const servicesMap = new Map<
+    string,
+    { id: string; title: string; price_from: number | null; category_id: string }[]
+  >();
+
+  if (profData && profData.length > 0) {
+    const proIds = profData.map((p) => p.user_id);
+
+    let svcQuery = supabase
+      .from("services")
+      .select("professional_id, id, title, price_from, category_id")
+      .in("professional_id", proIds)
+      .eq("active", true);
+
+    if (categoryId) {
+      svcQuery = svcQuery.eq("category_id", categoryId);
+    }
+
+    const { data: svcData, error: svcError } = await svcQuery;
+
+    if (svcError) {
+      console.error("[search] Services query error:", JSON.stringify(svcError));
+    }
+
+    for (const svc of svcData ?? []) {
+      const list = servicesMap.get(svc.professional_id) ?? [];
+      list.push(svc);
+      servicesMap.set(svc.professional_id, list);
+    }
+  }
+
+  // Step 3: Merge results
+  const professionals = (profData ?? []).map((p) => ({
+    ...p,
+    services: servicesMap.get(p.user_id) ?? [],
+  }));
+
+  // If category filter, only show professionals that have matching services
+  const filteredProfessionals = categoryId
+    ? professionals.filter((p) => p.services.length > 0)
+    : professionals;
 
   // Get current user's favorites
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  let favoriteIds = new Set<string>();
+  const favoriteIds = new Set<string>();
   if (user) {
     const { data: favs } = await supabase
       .from("favorites")
       .select("professional_id")
       .eq("customer_id", user.id);
-    favoriteIds = new Set((favs ?? []).map((f) => f.professional_id));
+    for (const f of favs ?? []) {
+      favoriteIds.add(f.professional_id);
+    }
   }
+
+  const hasError = !!profError;
 
   return (
     <>
@@ -82,9 +129,9 @@ export default async function SearchPage({
             {categoryName}
           </h1>
           <p className="mt-2 text-slate-500">
-            {searchError
+            {hasError
               ? "Unable to load professionals. Please try again."
-              : `${professionals?.length ?? 0} professional${(professionals?.length ?? 0) !== 1 ? "s" : ""} found`}
+              : `${filteredProfessionals.length} professional${filteredProfessionals.length !== 1 ? "s" : ""} found`}
           </p>
         </div>
 
@@ -116,7 +163,7 @@ export default async function SearchPage({
         </div>
 
         {/* Results */}
-        {searchError ? (
+        {hasError ? (
           <div className="rounded-2xl border border-dashed border-red-300 bg-white p-12 text-center dark:border-red-700 dark:bg-slate-900">
             <h2 className="text-lg font-semibold text-red-700 dark:text-red-300">
               Unable to load professionals
@@ -125,7 +172,7 @@ export default async function SearchPage({
               Please try again later.
             </p>
           </div>
-        ) : !professionals || professionals.length === 0 ? (
+        ) : filteredProfessionals.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center dark:border-slate-700 dark:bg-slate-900">
             <Briefcase className="mx-auto h-12 w-12 text-slate-300" />
             <h2 className="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-300">
@@ -137,7 +184,7 @@ export default async function SearchPage({
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {professionals.map((pro) => {
+            {filteredProfessionals.map((pro) => {
               const profile = Array.isArray(pro.profiles)
                 ? pro.profiles[0]
                 : pro.profiles;
