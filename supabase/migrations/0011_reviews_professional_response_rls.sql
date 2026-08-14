@@ -1,5 +1,8 @@
 -- Migration 0011: Reviews - Professional response RLS
 -- Adds RLS policy allowing professionals to respond to reviews directed at them.
+-- Safe to re-run: drops existing policy first.
+
+drop policy if exists "professionals respond to reviews" on public.reviews;
 
 -- Professionals can update reviews where they are the professional (for adding/editing response)
 -- Note: Application layer ensures only the 'response' field is modified.
