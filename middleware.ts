@@ -1,12 +1,23 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const PRODUCTION_DOMAIN = "proconnect.co.za";
+
 const protectedPaths = ["/dashboard", "/jobs", "/quotes", "/profile", "/admin", "/professional"];
 const customerOnlyPaths = ["/jobs/new", "/dashboard/post-job"];
 const professionalOnlyPaths = ["/professional"];
 const proOnlyPaths = ["/messages"];
 
 export async function middleware(request: NextRequest) {
+  const hostname = request.nextUrl.hostname;
+
+  if (hostname !== PRODUCTION_DOMAIN) {
+    const target = new URL(request.nextUrl);
+    target.hostname = PRODUCTION_DOMAIN;
+    target.protocol = "https:";
+    return NextResponse.redirect(target, 308);
+  }
+
   let response = NextResponse.next({ request });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
