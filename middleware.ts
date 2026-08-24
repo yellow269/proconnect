@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PRODUCTION_DOMAIN = "proconnect.co.za";
+const PRODUCTION_DOMAIN = "proconect.co.za";
 
 const protectedPaths = ["/dashboard", "/jobs", "/quotes", "/profile", "/admin", "/professional"];
 const customerOnlyPaths = ["/jobs/new", "/dashboard/post-job"];
