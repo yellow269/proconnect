@@ -3,10 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PRODUCTION_DOMAIN = "proconect.co.za";
 
-const protectedPaths = ["/dashboard", "/jobs", "/quotes", "/profile", "/admin", "/professional"];
+const protectedPaths = ["/dashboard", "/jobs", "/quotes", "/profile", "/admin", "/professional", "/messages"];
 const customerOnlyPaths = ["/jobs/new", "/dashboard/post-job"];
 const professionalOnlyPaths = ["/professional"];
-const proOnlyPaths = ["/messages"];
+const proOnlyPaths: string[] = [];
 
 export async function middleware(request: NextRequest) {
   const hostname = request.nextUrl.hostname;
