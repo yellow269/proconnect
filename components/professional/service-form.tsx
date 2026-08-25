@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -42,7 +42,50 @@ export function ServiceForm({ service, categories }: Props) {
     service?.duration_minutes?.toString() ?? "60"
   );
   const [imageUrl, setImageUrl] = useState(service?.image_url ?? "");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(service?.image_url ?? null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [active, setActive] = useState(service?.active ?? true);
+
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setError("Please select a JPG, PNG, or WebP image.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Image must be under 10 MB.");
+      return;
+    }
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setError("");
+  }
+
+  function handleRemoveImage() {
+    setImageFile(null);
+    setImagePreview(null);
+    setImageUrl("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function uploadImage(file: File, userId: string): Promise<string | null> {
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `${userId}/${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("service-images")
+      .upload(path, file, { contentType: file.type, upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from("service-images").getPublicUrl(path);
+    return data.publicUrl;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,9 +112,29 @@ export function ServiceForm({ service, categories }: Props) {
     };
 
     if (service?.id) {
+      let finalImageUrl = imageUrl || null;
+
+      if (imageFile) {
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (!user) {
+            setError("Not authenticated");
+            setLoading(false);
+            return;
+          }
+          finalImageUrl = await uploadImage(imageFile, user.id);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to upload image");
+          setLoading(false);
+          return;
+        }
+      }
+
       const { error: updateError } = await supabase
         .from("services")
-        .update(data)
+        .update({ ...data, image_url: finalImageUrl })
         .eq("id", service.id);
 
       if (updateError) {
@@ -90,9 +153,22 @@ export function ServiceForm({ service, categories }: Props) {
         return;
       }
 
+      let finalImageUrl = imageUrl || null;
+
+      if (imageFile) {
+        try {
+          finalImageUrl = await uploadImage(imageFile, user.id);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to upload image");
+          setLoading(false);
+          return;
+        }
+      }
+
       const { error: insertError } = await supabase.from("services").insert({
         ...data,
         professional_id: user.id,
+        image_url: finalImageUrl,
       });
 
       if (insertError) {
@@ -232,14 +308,42 @@ export function ServiceForm({ service, categories }: Props) {
 
       <div>
         <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Image URL (optional)
+          Service Photo (optional)
         </label>
+
+        {imagePreview ? (
+          <div className="relative inline-block">
+            <img
+              src={imagePreview}
+              alt="Service preview"
+              className="h-40 w-40 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700"
+            />
+            <button
+              type="button"
+              onClick={handleRemoveImage}
+              className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs text-white shadow-sm transition hover:bg-red-600"
+            >
+              &times;
+            </button>
+          </div>
+        ) : (
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="flex h-40 w-40 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 transition hover:border-brand-400 hover:bg-brand-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-brand-500"
+          >
+            <svg className="mb-2 h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+            </svg>
+            <span className="text-xs text-slate-500 dark:text-slate-400">Upload photo</span>
+          </div>
+        )}
+
         <input
-          type="url"
-          value={imageUrl}
-          onChange={(e) => setImageUrl(e.target.value)}
-          className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-slate-700 dark:bg-slate-800"
-          placeholder="https://example.com/image.jpg"
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleImageChange}
+          className="hidden"
         />
       </div>
 
