@@ -70,7 +70,7 @@ export function Header() {
           {!isAuth && (
             <>
               <Link href="/search" className="hover:text-slate-900 dark:hover:text-white">Find Professionals</Link>
-              <Link href="/search" className="hover:text-slate-900 dark:hover:text-white">Find Jobs</Link>
+              <Link href="/register" className="hover:text-slate-900 dark:hover:text-white">For Professionals</Link>
             </>
           )}
           {isAuth && role === "customer" && (
@@ -143,7 +143,7 @@ export function Header() {
             {!isAuth && (
               <>
                 <Link href="/search" className="rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">Find Professionals</Link>
-                <Link href="/search" className="rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">Find Jobs</Link>
+                <Link href="/register" className="rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">For Professionals</Link>
                 <hr className="border-slate-200 dark:border-slate-800" />
                 <Link href="/login" className="rounded-lg px-3 py-2 font-semibold text-brand-600 hover:bg-slate-100 dark:hover:bg-slate-800">Login</Link>
                 <Link href="/register" className="rounded-lg bg-brand-600 px-3 py-2.5 text-center font-semibold text-white hover:bg-brand-700">Create Account</Link>

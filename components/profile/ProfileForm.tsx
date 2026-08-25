@@ -99,7 +99,6 @@ export default function ProfileForm({
       }
     }
 
-    console.log("PROFILE SAVE SUCCESS", user.id);
     setLoading(false);
 
     if (isProfessional) {

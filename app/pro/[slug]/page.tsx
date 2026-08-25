@@ -5,6 +5,7 @@ import { StorefrontServices } from "./storefront-services";
 import { ReviewsSection } from "@/components/storefront/reviews-section";
 import { ShareBar } from "@/components/storefront/share-bar";
 import { MessageButton } from "@/components/messages/MessageButton";
+import { Footer } from "@/components/layout/footer";
 import type { Metadata } from "next";
 
 interface Props {
@@ -179,6 +180,7 @@ export default async function StorefrontPage({ params }: Props) {
           </div>
         </section>
       </div>
+      <Footer />
     </main>
   );
 }

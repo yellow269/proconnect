@@ -1,9 +1,22 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
 import { MapPin, Star, Briefcase } from "lucide-react";
 import { MessageButton } from "@/components/messages/MessageButton";
 import { FavoriteButton } from "@/components/favorites/FavoriteButton";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Find Trusted Professionals | ProConnect",
+  description:
+    "Search for verified local professionals in South Africa. Find plumbers, electricians, painters, and more. Compare quotes and hire with confidence.",
+  openGraph: {
+    title: "Find Trusted Professionals | ProConnect",
+    description:
+      "Search for verified local professionals in South Africa. Compare quotes and hire with confidence.",
+  },
+};
 
 export default async function SearchPage({
   searchParams,
@@ -257,6 +270,7 @@ export default async function SearchPage({
           </div>
         )}
       </main>
+      <Footer />
     </>
   );
 }
