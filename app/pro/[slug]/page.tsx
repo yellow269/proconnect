@@ -4,6 +4,7 @@ import { StorefrontHeader } from "@/components/storefront/storefront-header";
 import { StorefrontServices } from "./storefront-services";
 import { ReviewsSection } from "@/components/storefront/reviews-section";
 import { ShareBar } from "@/components/storefront/share-bar";
+import { MessageButton } from "@/components/messages/MessageButton";
 import type { Metadata } from "next";
 
 interface Props {
@@ -129,6 +130,14 @@ export default async function StorefrontPage({ params }: Props) {
       />
 
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+        {/* Contact actions */}
+        <div className="mb-8 flex items-center gap-4">
+          <MessageButton
+            professionalId={professional.user_id}
+            className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+          />
+        </div>
+
         {/* Services */}
         <section>
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">
