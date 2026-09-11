@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<intent-filters xmlns:android="http://schemas.android.com/apk/res/android">
+    <data android:scheme="https" android:host="proconect.co.za" />
+    <data android:scheme="http" android:host="proconect.co.za" />
+</intent-filters>

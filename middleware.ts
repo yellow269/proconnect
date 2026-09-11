@@ -3,10 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PRODUCTION_DOMAIN = "proconect.co.za";
 
-const protectedPaths = ["/dashboard", "/jobs", "/quotes", "/profile", "/admin", "/professional", "/messages"];
+const protectedPaths = ["/dashboard", "/jobs", "/quotes", "/profile", "/admin", "/professional"];
 const customerOnlyPaths = ["/jobs/new", "/dashboard/post-job"];
 const professionalOnlyPaths = ["/professional"];
-const proOnlyPaths: string[] = [];
+const proOnlyPaths = ["/messages"];
 
 export async function middleware(request: NextRequest) {
   const hostname = request.nextUrl.hostname;
@@ -97,5 +97,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw\\.js|api/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 };

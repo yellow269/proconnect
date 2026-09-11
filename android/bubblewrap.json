@@ -1,0 +1,31 @@
+{
+  "appId": "za.co.proconect.app",
+  "appName": "ProConnect",
+  "shortName": "ProConnect",
+  "packageId": "za.co.proconect.app",
+  "host": "proconect.co.za",
+  "scope": "/",
+  "startUrl": "/",
+  "themeColor": "#0b8ce9",
+  "backgroundColor": "#ffffff",
+  "iconUrl": "https://proconect.co.za/icons/icon-512.png",
+  "maskableIconUrl": "https://proconect.co.za/icons/maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "release-key.jks",
+    "alias": "proconnect",
+    "password": ""
+  },
+  "gitConfig": {
+    "commitMessage": "ProConnect Android TWA build"
+  },
+  "customSettings": {
+    "androidApiVersion": 33,
+    "minSdkVersion": 21,
+    "targetSdkVersion": 33,
+    "enableApkDelta": true
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "versionCode": 1
+}

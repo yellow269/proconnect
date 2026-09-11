@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ProConnect" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">#0b8ce9</item>
+        <item name="colorPrimaryDark">#0059a3</item>
+        <item name="colorAccent">#0b8ce9</item>
+        <item name="android:statusBarColor">#0b8ce9</item>
+        <item name="android:navigationBarColor">#0b8ce9</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.ProConnect.Splash" parent="Theme.ProConnect">
+        <item name="android:windowBackground">@drawable/splash_screen</item>
+    </style>
+</resources>

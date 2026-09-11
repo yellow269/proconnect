@@ -10,3 +10,13 @@ test-results
 .vercel
 dev-output2.log
 supabase/.temp/
+
+# Android / Keystore
+android/release-key.jks
+android/app/build/
+android/.gradle/
+android/build/
+*.aab
+*.apk
+*.keystore
+generate-icons.mjs
