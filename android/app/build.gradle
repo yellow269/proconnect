@@ -4,21 +4,36 @@ plugins {
 
 android {
     namespace 'za.co.proconect.app'
-    compileSdk 33
+    compileSdk 34
 
     defaultConfig {
         applicationId "za.co.proconect.app"
-        minSdk 21
-        targetSdk 33
+        minSdk 23
+        targetSdk 34
         versionCode 1
         versionName "1.0.0"
+    }
+
+    signingConfigs {
+        release {
+            def keystorePath = rootProject.file('release-key.jks')
+            def ksPassword = System.getenv('KEYSTORE_PASSWORD')
+            if (keystorePath.exists() && ksPassword) {
+                storeFile keystorePath
+                storePassword ksPassword
+                keyAlias 'proconnect'
+                keyPassword System.getenv('KEY_PASSWORD') ?: ksPassword
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            if (signingConfigs.release.storeFile) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
@@ -26,24 +41,13 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-
-    signingConfigs {
-        release {
-            def keystorePath = rootProject.file('release-key.jks')
-            if (keystorePath.exists()) {
-                storeFile keystorePath
-                storePassword System.console()?.readLine("Keystore password: ") ?: ''
-                keyAlias 'proconnect'
-                keyPassword System.console()?.readLine("Key password: ") ?: ''
-            }
-        }
-    }
 }
 
 dependencies {
-    implementation 'com.google.androidbrowserhelper:android-browser-helper:2.4.0'
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.core:core:1.12.0'
+    implementation 'androidx.browser:browser:1.6.0'
     implementation 'com.google.android.material:material:1.11.0'
 }
 

@@ -1,6 +1,6 @@
 @ECHO OFF
 REM ProConnect Android Build Script
-REM This script builds the Android App Bundle (.aab) for Google Play Store
+REM Builds the Android App Bundle (.aab) for Google Play Store
 
 SET APP_NAME=ProConnect
 SET PACKAGE_ID=za.co.proconect.app
@@ -27,49 +27,39 @@ echo [1/4] Checking Java version...
 java -version 2>&1
 echo.
 
-echo [2/4] Starting Gradle build...
+echo [2/4] Running Gradle build...
 cd %BUILD_DIR%
 
-REM Check if gradlew exists, if not use gradle directly
-if exist "gradlew.bat" (
-    call gradlew.bat bundleRelease
-) else (
-    where gradle >nul 2>&1
-    if %ERRORLEVEL% EQU 0 (
-        gradle bundleRelease
-    ) else (
-        echo ERROR: Neither gradlew.bat nor gradle command found.
-        echo.
-        echo Please either:
-        echo   1. Install Gradle: https://gradle.org/install/
-        echo   2. Or use: winget install Gradle.Gradle
-        echo.
-        exit /b 1
-    )
+if not exist "gradlew.bat" (
+    echo ERROR: gradlew.bat not found in %BUILD_DIR%\
+    echo.
+    exit /b 1
 )
+
+call gradlew.bat bundleRelease --no-daemon
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo ERROR: Build failed. Please check the error messages above.
+    cd ..
     exit /b 1
 )
+
+cd ..
 
 echo.
 echo [3/4] Build successful!
 echo.
 echo [4/4] Locating output file...
 
-set AAB_PATH=
-for /r %%f in (*.aab) do set AAB_PATH=%%f
-
-if defined AAB_PATH (
+set AAB_PATH=%BUILD_DIR%\app\build\outputs\bundle\release\app-release.aab
+if exist "%AAB_PATH%" (
     echo.
     echo ========================================
     echo  BUILD COMPLETE
     echo ========================================
     echo.
-    echo  App Bundle location:
-    echo  %AAB_PATH%
+    echo  App Bundle: %AAB_PATH%
     echo.
     echo  Next steps:
     echo  1. Go to https://play.google.com/console
@@ -80,8 +70,8 @@ if defined AAB_PATH (
     echo.
 ) else (
     echo.
-    echo WARNING: Could not locate .aab file.
-    echo Check android/app/build/outputs/bundle/release/ manually.
+    echo WARNING: Could not locate .aab file at:
+    echo   %AAB_PATH%
+    echo.
+    echo Check android\app\build\outputs\bundle\release\ manually.
 )
-
-cd ..
