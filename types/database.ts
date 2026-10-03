@@ -877,13 +877,61 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "professional_storefront_settings_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: true;
-            referencedRelation: "professional_profiles";
-            referencedColumns: ["user_id"];
+            foreignKeyName: "professional_storefront_settings_user_id_fkey",
+            columns: ["user_id"],
+            isOneToOne: true,
+            referencedRelation: "professional_profiles",
+            referencedColumns: ["user_id"],
           },
         ];
+      };
+      leads: {
+        Row: {
+          id: string;
+          business_name: string | null;
+          service: string | null;
+          city: string | null;
+          phone: string | null;
+          address: string | null;
+          contact_name: string | null;
+          contacted: boolean | null;
+          replied: boolean | null;
+          joined_proconnect: boolean | null;
+          notes: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          business_name?: string | null;
+          service?: string | null;
+          city?: string | null;
+          phone?: string | null;
+          address?: string | null;
+          contact_name?: string | null;
+          contacted?: boolean | null;
+          replied?: boolean | null;
+          joined_proconnect?: boolean | null;
+          notes?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          business_name?: string | null;
+          service?: string | null;
+          city?: string | null;
+          phone?: string | null;
+          address?: string | null;
+          contact_name?: string | null;
+          contacted?: boolean | null;
+          replied?: boolean | null;
+          joined_proconnect?: boolean | null;
+          notes?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
       };
     };
     Views: {};

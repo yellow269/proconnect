@@ -6,6 +6,7 @@ const PRODUCTION_DOMAIN = "proconect.co.za";
 const protectedPaths = ["/dashboard", "/jobs", "/quotes", "/profile", "/admin", "/professional"];
 const customerOnlyPaths = ["/jobs/new", "/dashboard/post-job"];
 const professionalOnlyPaths = ["/professional"];
+const adminOnlyPaths = ["/admin"];
 const proOnlyPaths = ["/messages"];
 
 export async function middleware(request: NextRequest) {
@@ -57,8 +58,9 @@ export async function middleware(request: NextRequest) {
   if (user) {
     const isCustomerOnly = customerOnlyPaths.some((path) => pathname === path);
     const isProfessionalOnly = professionalOnlyPaths.some((path) => pathname.startsWith(path));
+    const isAdminOnly = adminOnlyPaths.some((path) => pathname.startsWith(path));
 
-    if (isCustomerOnly || isProfessionalOnly) {
+    if (isCustomerOnly || isProfessionalOnly || isAdminOnly) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
@@ -72,6 +74,10 @@ export async function middleware(request: NextRequest) {
       }
 
       if (isProfessionalOnly && role === "customer") {
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
+
+      if (isAdminOnly && role !== "admin") {
         return NextResponse.redirect(new URL("/dashboard", request.url));
       }
     }
