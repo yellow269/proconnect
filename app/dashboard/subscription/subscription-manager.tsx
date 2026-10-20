@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PLANS } from "@/lib/plans";
+import { PLANS, formatMonthlyPrice } from "@/lib/plans";
 
 interface SubscriptionData {
   id: string;
@@ -39,6 +39,9 @@ export function SubscriptionManager({ subscription, paymentStatus }: Props) {
 
   const isActive = localSub?.status === "active";
   const isFree = !localSub || localSub.status === "inactive" || localSub.plan === "free";
+  const needsRenewal = Boolean(
+    localSub && !isFree && (!isActive || localSub.status === "cancelled" || localSub.status === "expired" || localSub.status === "past_due")
+  );
 
   async function handleUpgrade() {
     setLoading(true);
@@ -149,6 +152,11 @@ export function SubscriptionManager({ subscription, paymentStatus }: Props) {
             <div className="space-y-1">
               <p className="text-sm text-slate-500">Current Plan</p>
               <h3 className="text-xl font-bold">{localSub.plan_name ?? PLANS.pro.name}</h3>
+              <p className="text-sm text-slate-500">
+                {localSub.amount != null
+                  ? `R${Number(localSub.amount).toFixed(0)}/month`
+                  : formatMonthlyPrice(PLANS.pro)}
+              </p>
               <div className="flex items-center gap-2">
                 <span
                   className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
@@ -160,6 +168,23 @@ export function SubscriptionManager({ subscription, paymentStatus }: Props) {
               </div>
             </div>
           </div>
+
+          <ul className="mt-6 space-y-2 border-t border-slate-100 pt-6 text-sm dark:border-slate-800">
+            {PLANS.pro.features.slice(1).map((feature) => (
+              <li key={feature} className="flex items-center gap-3">
+                <svg
+                  className="h-4 w-4 shrink-0 text-brand-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                {feature}
+              </li>
+            ))}
+          </ul>
 
           <div className="mt-6 grid grid-cols-2 gap-4 border-t border-slate-100 pt-6 dark:border-slate-800">
             <div>
@@ -203,13 +228,36 @@ export function SubscriptionManager({ subscription, paymentStatus }: Props) {
 
           {isActive && (
             <div className="mt-6 border-t border-slate-100 pt-6 dark:border-slate-800">
+              <p className="text-xs text-slate-400">
+                Cancellation: cancel anytime. Your subscription stays active
+                until the end of the current billing period, then billing stops
+                and additional service listings will require a new
+                subscription.
+              </p>
               <button
                 type="button"
                 disabled={cancelling}
                 onClick={handleCancel}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-red-200 px-5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+                className="mt-4 inline-flex h-10 items-center justify-center rounded-xl border border-red-200 px-5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
               >
                 {cancelling ? "Cancelling..." : "Cancel Subscription"}
+              </button>
+            </div>
+          )}
+
+          {needsRenewal && (
+            <div className="mt-6 border-t border-slate-100 pt-6 dark:border-slate-800">
+              <p className="text-sm text-slate-500">
+                Your subscription is not active. Subscribe again to keep adding
+                unlimited service listings.
+              </p>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleUpgrade}
+                className="mt-4 inline-flex h-11 items-center justify-center rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "Redirecting to PayFast..." : `Renew for ${formatMonthlyPrice(PLANS.pro)}`}
               </button>
             </div>
           )}
@@ -221,8 +269,15 @@ export function SubscriptionManager({ subscription, paymentStatus }: Props) {
         <div className="rounded-2xl border-2 border-brand-500 bg-white p-8 shadow-soft dark:bg-slate-900">
           <div className="text-center">
             <h3 className="text-2xl font-bold">{PLANS.pro.name}</h3>
+            <p className="mt-2 text-sm font-semibold text-brand-600">
+              {formatMonthlyPrice(PLANS.pro)}
+            </p>
             <p className="mt-2 text-sm text-slate-500">
               {PLANS.pro.description}
+            </p>
+            <p className="mt-2 text-xs text-slate-400">
+              Your first service listing is free. Subscribing lets you add
+              unlimited service listings.
             </p>
           </div>
 
@@ -253,11 +308,11 @@ export function SubscriptionManager({ subscription, paymentStatus }: Props) {
             onClick={handleUpgrade}
             className="mt-8 inline-flex h-12 w-full items-center justify-center rounded-xl bg-brand-600 px-6 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Redirecting to PayFast..." : "Upgrade to Pro"}
+            {loading ? "Redirecting to PayFast..." : `Subscribe for ${formatMonthlyPrice(PLANS.pro)}`}
           </button>
 
           <p className="mt-3 text-center text-xs text-slate-400">
-            Cancel Anytime
+            Billed monthly in ZAR via PayFast. Cancel anytime.
           </p>
         </div>
       )}
@@ -271,11 +326,14 @@ export function SubscriptionManager({ subscription, paymentStatus }: Props) {
               <tr className="border-b border-slate-100 dark:border-slate-800">
                 <th className="pb-3 text-left font-medium text-slate-500">Feature</th>
                 <th className="pb-3 text-center font-medium text-slate-500">Free</th>
-                <th className="pb-3 text-center font-medium text-brand-600">Pro</th>
+                <th className="pb-3 text-center font-medium text-brand-600">Professional</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
               {[
+                { name: "Monthly price", free: "R0", pro: formatMonthlyPrice(PLANS.pro) },
+                { name: "First service listing", free: "Free", pro: "Included" },
+                { name: "Service listings", free: "First one free", pro: "Unlimited" },
                 { name: "Quotes", free: "5 per month", pro: "Unlimited" },
                 { name: "Jobs", free: "3 active", pro: "Unlimited" },
                 { name: "Messaging", free: "Basic", pro: "Unlimited" },

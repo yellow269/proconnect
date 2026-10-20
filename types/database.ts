@@ -65,6 +65,7 @@ export interface Database {
           available: boolean;
           average_rating: number;
           review_count: number;
+          free_listing_used: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -79,6 +80,7 @@ export interface Database {
           available?: boolean;
           average_rating?: number;
           review_count?: number;
+          free_listing_used?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -93,6 +95,7 @@ export interface Database {
           available?: boolean;
           average_rating?: number;
           review_count?: number;
+          free_listing_used?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -943,6 +946,12 @@ export interface Database {
       seed_categories: {
         Args: Record<string, never>;
         Returns: void;
+      };
+      has_active_subscription: {
+        Args: {
+          p_professional_id: string;
+        };
+        Returns: boolean;
       };
       has_booking_conflict: {
         Args: {

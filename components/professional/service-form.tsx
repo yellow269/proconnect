@@ -4,6 +4,11 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ServiceListingStatus } from "@/components/professional/service-listing-status";
+import {
+  SUBSCRIPTION_REQUIRED_MESSAGE,
+  isSubscriptionRequiredError,
+} from "@/lib/service-listing";
 import type { Tables } from "@/types/database";
 
 type Category = Tables<"categories">;
@@ -25,6 +30,7 @@ export function ServiceForm({ service, categories }: Props) {
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [subscriptionRequired, setSubscriptionRequired] = useState(false);
 
   const [title, setTitle] = useState(service?.title ?? "");
   const [categoryId, setCategoryId] = useState(service?.category_id ?? "");
@@ -91,6 +97,7 @@ export function ServiceForm({ service, categories }: Props) {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setSubscriptionRequired(false);
 
     if (!title || !categoryId) {
       setError("Title and category are required");
@@ -172,7 +179,14 @@ export function ServiceForm({ service, categories }: Props) {
       });
 
       if (insertError) {
-        setError(insertError.message);
+        // The database enforces the free-first-listing + subscription rules.
+        // Show a helpful upgrade prompt instead of a raw database error.
+        if (isSubscriptionRequiredError(insertError)) {
+          setSubscriptionRequired(true);
+          setError(SUBSCRIPTION_REQUIRED_MESSAGE);
+        } else {
+          setError(insertError.message);
+        }
         setLoading(false);
         return;
       }
@@ -188,6 +202,13 @@ export function ServiceForm({ service, categories }: Props) {
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
           {error}
         </div>
+      )}
+
+      {subscriptionRequired && (
+        <ServiceListingStatus
+          freeListingUsed
+          hasActiveSubscription={false}
+        />
       )}
 
       <div>

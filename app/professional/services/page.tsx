@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Plus } from "lucide-react";
 import { ServiceList } from "@/components/professional/service-list";
+import { ServiceListingStatus } from "@/components/professional/service-listing-status";
+import { isSubscriptionActive } from "@/lib/service-listing";
 
 export default async function ServicesPage() {
   const supabase = await createClient();
@@ -32,6 +34,25 @@ export default async function ServicesPage() {
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: false });
 
+  // Free listing status + subscription state for the listing gate
+  const [{ data: professionalProfile }, { data: subscription }] =
+    await Promise.all([
+      supabase
+        .from("professional_profiles")
+        .select("free_listing_used")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("subscriptions")
+        .select("status, current_period_end")
+        .or(`user_id.eq.${user.id},professional_id.eq.${user.id}`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+  const hasActiveSubscription = isSubscriptionActive(subscription);
+
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -51,6 +72,11 @@ export default async function ServicesPage() {
           Add Service
         </Link>
       </div>
+
+      <ServiceListingStatus
+        freeListingUsed={professionalProfile?.free_listing_used ?? false}
+        hasActiveSubscription={hasActiveSubscription}
+      />
 
       <div className="mt-6">
         <ServiceList services={services ?? []} />

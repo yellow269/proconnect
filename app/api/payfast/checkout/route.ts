@@ -8,6 +8,7 @@ import {
 } from "@/lib/payfast";
 
 import { PLANS } from "@/lib/plans";
+import { isSubscriptionActive } from "@/lib/service-listing";
 import type { SubscriptionPlan } from "@/types/database";
 
 export async function POST(req: Request) {
@@ -49,6 +50,10 @@ export async function POST(req: Request) {
     const planKey =
       plan as Exclude<SubscriptionPlan, "free">;
 
+    /**
+     * The amount is ALWAYS read from the server-side plan config.
+     * Any price supplied by the browser is ignored.
+     */
     const planConfig = PLANS[planKey];
 
     // ==================================================
@@ -57,7 +62,7 @@ export async function POST(req: Request) {
 
     const { data: activeSub, error: activeError } = await supabase
       .from("subscriptions")
-      .select("id")
+      .select("id, status, current_period_end")
       .or(`user_id.eq.${user.id},professional_id.eq.${user.id}`)
       .eq("status", "active")
       .maybeSingle();
@@ -70,7 +75,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (activeSub) {
+    // An expired billing period never counts as an active subscription,
+    // so it must not block a fresh checkout.
+    if (isSubscriptionActive(activeSub)) {
       return NextResponse.json(
         { error: "You already have an active subscription" },
         { status: 400 }

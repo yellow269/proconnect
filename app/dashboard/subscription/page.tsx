@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { PLANS, formatMonthlyPrice } from "@/lib/plans";
 import { SubscriptionManager } from "./subscription-manager";
 
 export default async function SubscriptionPage({
@@ -30,7 +31,8 @@ export default async function SubscriptionPage({
     <main className="mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-bold">Subscription</h1>
       <p className="mt-2 text-slate-500">
-        Manage your ProConnect subscription plan.
+        Manage your ProConnect Professional subscription — {formatMonthlyPrice(PLANS.pro)} for
+        unlimited service listings. Your first service listing is free.
       </p>
 
       <div className="mt-8">
