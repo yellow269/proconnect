@@ -2,15 +2,16 @@ import Link from "next/link";
 import { AuthForm } from "@/components/auth/auth-form";
 import { AuthShell } from "@/components/auth/auth-shell";
 
-export default function Page({
+export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string; error?: string }>;
+  searchParams: Promise<{ message?: string; error?: string; next?: string }>;
 }) {
+  const { next } = await searchParams;
   return (
     <AuthShell title="Welcome back" subtitle="Log in to manage your projects">
       <SearchParamsMessage searchParams={searchParams} />
-      <AuthForm mode="login" />
+      <AuthForm mode="login" next={next} />
       <div className="mt-5 flex justify-between text-sm">
         <Link href="/forgot-password" className="text-brand-600">
           Forgot password?

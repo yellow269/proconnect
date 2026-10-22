@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { emailSchema, loginSchema, registerSchema, resetSchema } from "@/lib/validation/auth";
+import { emailSchema, loginSchema, registerSchema, resetSchema, resolvePostLoginPath } from "@/lib/validation/auth";
 
 function friendlyError(message: string): string {
   const m = message.toLowerCase();
@@ -51,7 +51,7 @@ function friendlyError(message: string): string {
   return "We\u2019re having trouble connecting to the login service. Please try again later.";
 }
 
-export function AuthForm({ mode }: { mode: "login" | "register" | "forgot" | "reset" }) {
+export function AuthForm({ mode, next }: { mode: "login" | "register" | "forgot" | "reset"; next?: string }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -97,7 +97,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" | "forgot" | "re
           submitting.current = false;
           return;
         }
-        router.push("/dashboard");
+        router.push(resolvePostLoginPath(next));
         router.refresh();
       } else if (mode === "register") {
         // Single API call handles signup + confirm + login
@@ -163,9 +163,12 @@ export function AuthForm({ mode }: { mode: "login" | "register" | "forgot" | "re
 
   async function google() {
     const supabase = createClient();
+    const destination = resolvePostLoginPath(next);
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(destination)}`,
+      },
     });
   }
 
