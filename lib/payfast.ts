@@ -83,6 +83,13 @@ export function generateSignature(
       continue;
     }
 
+    // PayFast's official PHP SDK treats "0" as empty, so a
+    // cycles value of "0" (unlimited) is excluded from the
+    // signature. It must still be sent in the checkout data.
+    if (key === "cycles" && String(value).trim() === "0") {
+      continue;
+    }
+
     parts.push(`${key}=${encodeValue(String(value))}`);
   }
 
